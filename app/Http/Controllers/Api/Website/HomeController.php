@@ -25,7 +25,7 @@ class HomeController extends Controller
     {
         try {
 
-            $subCategoriesLimit = $request->input('categories_limit', 5);
+            $subCategoriesLimit = $request->input('categories_limit', 2);
 
             $sub_categories = Category::where('status_id', 1)
                 ->whereHas('products', function ($q) {

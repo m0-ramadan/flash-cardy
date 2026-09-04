@@ -2,23 +2,17 @@
 
 namespace App\Http\Controllers\Api\Website;
 
-use App\Models\Cart;
-use App\Models\Product;
-use App\Models\CartItem;
-use App\Models\Material;
-use Illuminate\Http\Request;
-use App\Models\DesignService;
-use App\Models\PrintLocation;
-use App\Models\PrintingMethod;
-use App\Models\ProductOptions;
-use App\Traits\ApiResponseTrait;
-use App\Models\EmbroiderLocation;
-use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\Website\CartResource;
 use App\Http\Requests\Website\AddToCartRequest;
-use App\Http\Resources\Website\CartItemResource;
 use App\Http\Requests\Website\UpdateCartItemRequest;
+use App\Http\Resources\Website\CartItemResource;
+use App\Http\Resources\Website\CartResource;
+use App\Models\Cart;
+use App\Models\CartItem;
+use App\Models\Product;
+use App\Traits\ApiResponseTrait;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
@@ -40,6 +34,8 @@ class CartController extends Controller
     public function index(Request $request)
     {
         $cart = $this->getCurrentCart();
+        $this->syncCartPrices($cart);
+
         return $this->success(new CartResource($cart), 'تم جلب السلة بنجاح');
     }
 
@@ -53,21 +49,19 @@ class CartController extends Controller
             $priceData = $this->calculateItemPrice($request);
 
             // تجهيز الـ JSON fields واستحداث hash_key لمنع التكرار
-          //  $printLocationsJson = $request->filled('print_locations') ? json_encode($request->print_locations, JSON_UNESCAPED_UNICODE) : null;
-         //   $embroiderLocationsJson = $request->filled('embroider_locations') ? json_encode($request->embroider_locations, JSON_UNESCAPED_UNICODE) : null;
-          //  $selectedOptionsJson = $request->filled('selected_options') ? json_encode($request->selected_options, JSON_UNESCAPED_UNICODE) : null;
+            //  $printLocationsJson = $request->filled('print_locations') ? json_encode($request->print_locations, JSON_UNESCAPED_UNICODE) : null;
+            //   $embroiderLocationsJson = $request->filled('embroider_locations') ? json_encode($request->embroider_locations, JSON_UNESCAPED_UNICODE) : null;
+            //  $selectedOptionsJson = $request->filled('selected_options') ? json_encode($request->selected_options, JSON_UNESCAPED_UNICODE) : null;
 
             $hashAttributes = [
                 'product_id' => (int) $request->product_id,
-              //  'size_id' => $request->size_id ? (int) $request->size_id : null,
-                //'color_id' => $request->color_id ? (int) $request->color_id : null,
-               // 'material_id' => $request->material_id ? (int) $request->material_id : null,
-              //  'printing_method_id' => $request->printing_method_id ? (int) $request->printing_method_id : null,
-              //  'print_locations' => $request->print_locations ?? [],
-              //  'embroider_locations' => $request->embroider_locations ?? [],
-                //'selected_options' => $request->selected_options ?? [],
-                'design_service_id' => $request->design_service_id ?? null,
-                'is_sample' => (bool) $request->boolean('is_sample', false),
+                //  'size_id' => $request->size_id ? (int) $request->size_id : null,
+                // 'color_id' => $request->color_id ? (int) $request->color_id : null,
+                // 'material_id' => $request->material_id ? (int) $request->material_id : null,
+                //  'printing_method_id' => $request->printing_method_id ? (int) $request->printing_method_id : null,
+                //  'print_locations' => $request->print_locations ?? [],
+                //  'embroider_locations' => $request->embroider_locations ?? [],
+                // 'selected_options' => $request->selected_options ?? [],
             ];
             $hashKey = md5(json_encode($hashAttributes, JSON_UNESCAPED_UNICODE));
 
@@ -92,7 +86,7 @@ class CartController extends Controller
                 // لو العنصر موجود — نزود الكمية بالكمية الواردة
                 $cartItem->increment('quantity', $request->quantity);
                 $cartItem->price_per_unit = $priceData['price_per_unit'];
-                $cartItem->line_total = $cartItem->quantity * $cartItem->price_per_unit;
+                $cartItem->line_total = round($cartItem->quantity * $cartItem->price_per_unit, 4);
                 $cartItem->save();
             } else {
                 // انشئ عنصر جديد
@@ -128,7 +122,7 @@ class CartController extends Controller
                 'is_sample',
                 'note',
                 'quantity_id',
-                'image_design'
+                'image_design',
             ]);
 
             // نحسب السعر بناء على التخصيص الجديد — نمرر المنتج الحالي كـ param اختياري
@@ -139,11 +133,9 @@ class CartController extends Controller
 
             $priceData = $this->calculateItemPrice($priceRequest, $cartItem->product);
 
-
             // إعادة توليد hash_key لأن التخصيصات قد تتغير
             $hashAttributes = [
                 'product_id' => $cartItem->product_id,
-                'is_sample' => isset($data['is_sample']) ? (bool)$data['is_sample'] : (bool)$cartItem->is_sample,
             ];
             $newHashKey = md5(json_encode($hashAttributes, JSON_UNESCAPED_UNICODE));
 
@@ -152,7 +144,7 @@ class CartController extends Controller
                 'quantity' => $data['quantity'] ?? $cartItem->quantity,
                 'note' => $data['note'] ?? $cartItem->note,
                 'quantity_id' => $data['quantity_id'] ?? $cartItem->quantity_id,
-                'is_sample' => isset($data['is_sample']) ? (bool)$data['is_sample'] : $cartItem->is_sample,
+                'is_sample' => isset($data['is_sample']) ? (bool) $data['is_sample'] : $cartItem->is_sample,
                 'price_per_unit' => $priceData['price_per_unit'],
                 'line_total' => $priceData['line_total'],
                 'hash_key' => $newHashKey,
@@ -161,7 +153,7 @@ class CartController extends Controller
             // إعادة حساب السلة
             $this->recalculateCart($cartItem->cart);
 
-            return $this->success(new CartResource($cartItem->cart->fresh(['items.product', 'items.size', 'items.color', 'items.printingMethod', 'items.designService'])), 'تم تحديث العنصر بنجاح');
+            return $this->success(new CartResource($cartItem->cart->fresh(['items.product'])), 'تم تحديث العنصر بنجاح');
         });
     }
 
@@ -174,6 +166,7 @@ class CartController extends Controller
             $cart = $cartItem->cart;
             $cartItem->delete();
             $this->recalculateCart($cart);
+
             return $this->success(new CartResource($cart->fresh(['items'])), 'تم حذف العنصر من السلة');
         });
     }
@@ -184,6 +177,7 @@ class CartController extends Controller
         $cart = $this->getCurrentCart();
         $cart->items()->delete();
         $cart->update(['subtotal' => 0, 'total' => 0]);
+
         return $this->success(null, 'تم تفريغ السلة');
     }
 
@@ -220,32 +214,19 @@ class CartController extends Controller
      * حساب السعر لعُنصر السلة.
      * يقبل Request و product اختياري (مفيد عند التحديث).
      *
-     * @param Request $request
-     * @param Product|null $product
      * @return array ['price_per_unit' => float, 'line_total' => float]
      */
-
-
- 
-    private function calculateItemPrice(Request $request, Product $product = null): array
+    private function calculateItemPrice(Request $request, ?Product $product = null): array
     {
-        $product  = $product ?? Product::findOrFail($request->product_id);
+        $product = $product ?? Product::findOrFail($request->product_id);
         $quantity = (int) ($request->quantity ?? 1);
 
-        // ============================
-        // 🟢 base unit price
-        // ============================
-        $unitPrice = $product->base_price ?? 0;
-
-
-        // ============================
-        // 🧮 totals
-        // ============================
-        $lineTotal = ($unitPrice * $quantity) ;
+        $unitPrice = (float) ($product->final_price ?? $product->price ?? 0);
+        $lineTotal = $unitPrice * $quantity;
 
         return [
-            'price_per_unit' => round($unitPrice,  2),
-            'line_total'     => round($lineTotal, 2),
+            'price_per_unit' => round($unitPrice, 2),
+            'line_total' => round($lineTotal, 4),
         ];
     }
 
@@ -256,5 +237,37 @@ class CartController extends Controller
             'subtotal' => $subtotal,
             'total' => $subtotal, // مستقبلًا: + شحن - خصم
         ]);
+    }
+
+    private function syncCartPrices(Cart $cart): void
+    {
+        $cart->loadMissing('items.product');
+
+        foreach ($cart->items as $item) {
+            if (! $item->product) {
+                continue;
+            }
+
+            $priceData = $this->calculateItemPrice(
+                new Request([
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                ]),
+                $item->product
+            );
+
+            if (
+                bccomp((string) $item->price_per_unit, (string) $priceData['price_per_unit'], 2) !== 0
+                || bccomp((string) $item->line_total, (string) $priceData['line_total'], 4) !== 0
+            ) {
+                $item->update([
+                    'price_per_unit' => $priceData['price_per_unit'],
+                    'line_total' => $priceData['line_total'],
+                ]);
+            }
+        }
+
+        $this->recalculateCart($cart);
+        $cart->refresh()->load('items.product');
     }
 }

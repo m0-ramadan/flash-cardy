@@ -31,11 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-
     'paymob' => [
         'username' => env('PAYMOB_USERNAME'),
         'password' => env('PAYMOB_PASSWORD'),
         'api_key' => env('PAYMOB_API_KEY'),
+        'secret_key' => env('PAYMOB_SECRET_KEY'),
         'hmac_secret' => env('PAYMOB_HMAC_SECRET'),
         'integration_id' => env('PAYMOB_INTEGRATION_ID', '5463067'),
         'iframe_id' => env('PAYMOB_IFRAME_ID', '995308'),
@@ -44,8 +44,9 @@ return [
         'base_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com'),
 
         // Endpoints
-        'auth_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com') . '/api/auth/tokens',
-        'payment_links_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com') . '/api/ecommerce/payment-links',
+        'auth_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com').'/api/auth/tokens',
+        'payment_links_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com').'/api/ecommerce/payment-links',
+        'intention_url' => env('PAYMOB_BASE_URL', 'https://accept.paymob.com').'/v1/intention/',
 
         // Public key
         'public_key' => env('PAYMOB_PUBLIC_KEY'),
@@ -59,21 +60,40 @@ return [
 
         // URLs
         'callback_url' => env('PAYMOB_CALLBACK_URL'),
-        // 'return_url' => env('PAYMOB_RETURN_URL'),
-        // 'cancel_url' => env('PAYMOB_CANCEL_URL'),
+        'return_url' => env('PAYMOB_RETURN_URL'),
+        'cancel_url' => env('PAYMOB_CANCEL_URL'),
 
     ],
+    'nowpayments' => [
+        'base_url' => env('NOWPAYMENTS_BASE_URL', 'https://api.nowpayments.io/v1'),
+        'api_key' => env('NOWPAYMENTS_API_KEY'),
+        'ipn_secret' => env('NOWPAYMENTS_IPN_SECRET'),
+        'store_currency' => strtoupper(env('NOWPAYMENTS_STORE_CURRENCY', 'EGP')),
+        'price_currency' => strtolower(env('NOWPAYMENTS_PRICE_CURRENCY', 'USD')),
+        'payout_currency' => strtolower(env('NOWPAYMENTS_PAYOUT_CURRENCY', 'usdttrc20')),
+        'default_pay_currency' => strtolower(env('NOWPAYMENTS_DEFAULT_PAY_CURRENCY', 'usdttrc20')),
+        'allowed_pay_currencies' => array_values(array_filter(array_map(
+            fn ($currency) => strtolower(trim($currency)),
+            explode(',', env('NOWPAYMENTS_ALLOWED_PAY_CURRENCIES', 'usdttrc20,usdtbsc'))
+        ))),
+        'is_fixed_rate' => filter_var(env('NOWPAYMENTS_FIXED_RATE', false), FILTER_VALIDATE_BOOLEAN),
+        'is_fee_paid_by_user' => filter_var(env('NOWPAYMENTS_FEE_PAID_BY_USER', false), FILTER_VALIDATE_BOOLEAN),
+        'success_url' => env('NOWPAYMENTS_SUCCESS_URL'),
+        'cancel_url' => env('NOWPAYMENTS_CANCEL_URL'),
+        'connect_timeout' => (int) env('NOWPAYMENTS_CONNECT_TIMEOUT', 5),
+        'timeout' => (int) env('NOWPAYMENTS_TIMEOUT', 20),
+    ],
     'like4app' => [
-        'device_id'     => env('LIKE4APP_DEVICE_ID', '79e55b05dbdb440283797f15c8c688d96f0edea9c4821f0ad0ec2036030370f8'),
-        'security_code' => env('LIKE4APP_SECURITY_CODE', '01c75aa369cbf785f169c0e045b963f74088f16127ece710e050216040bf3460'),
-        'email'         => env('LIKE4APP_EMAIL', 'Mr.mtttm@gmail.com'),
-        'lang_id'       => env('LIKE4APP_LANG_ID', '1'),
-        'secret_key' => env('LIKE4APP_SECRET_KEY', 't-3zafRa'),
-        'secret_iv'  => env('LIKE4APP_SECRET_IV', 'St@cE4eZ'),
+        'device_id' => env('LIKE4APP_DEVICE_ID'),
+        'security_code' => env('LIKE4APP_SECURITY_CODE'),
+        'email' => env('LIKE4APP_EMAIL'),
+        'lang_id' => env('LIKE4APP_LANG_ID', '1'),
+        'secret_key' => env('LIKE4APP_SECRET_KEY'),
+        'secret_iv' => env('LIKE4APP_SECRET_IV'),
     ],
     'deepseek' => [
         'api_key' => env('DEEPSEEK_API_KEY'),
-        'model'   => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
         'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
     ],
 ];

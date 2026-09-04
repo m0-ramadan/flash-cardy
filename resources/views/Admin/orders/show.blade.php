@@ -859,6 +859,50 @@
                                         </div>
                                     @endif
 
+                                    @if ($order->latestPaymentTransaction)
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">بوابة الدفع:</span>
+                                            <span class="summary-value">{{ $order->latestPaymentTransaction->gateway }}</span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">حالة الدفع:</span>
+                                            <span class="summary-value">
+                                                {{ $order->latestPaymentTransaction->status }}
+                                                @if ($order->latestPaymentTransaction->requires_manual_review)
+                                                    <span class="badge bg-warning ms-2">Manual Review</span>
+                                                @endif
+                                            </span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">Provider Payment ID:</span>
+                                            <span class="summary-value" dir="ltr">{{ $order->latestPaymentTransaction->provider_payment_id ?? '--' }}</span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">المبلغ المتوقع:</span>
+                                            <span class="summary-value">{{ $order->latestPaymentTransaction->pay_amount ?? '--' }} {{ strtoupper($order->latestPaymentTransaction->pay_currency ?? '') }}</span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">المدفوع فعليًا:</span>
+                                            <span class="summary-value">{{ $order->latestPaymentTransaction->actually_paid ?? '0' }} {{ strtoupper($order->latestPaymentTransaction->pay_currency ?? '') }}</span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">تحويل العملة:</span>
+                                            <span class="summary-value">
+                                                {{ $order->latestPaymentTransaction->original_amount }} {{ $order->latestPaymentTransaction->original_currency }}
+                                                /
+                                                {{ $order->latestPaymentTransaction->price_amount }} {{ strtoupper($order->latestPaymentTransaction->price_currency ?? '') }}
+                                            </span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">سعر الصرف:</span>
+                                            <span class="summary-value">{{ $order->latestPaymentTransaction->exchange_rate ?? '--' }}</span>
+                                        </div>
+                                        <div class="summary-row" bis_skin_checked="1">
+                                            <span class="summary-label">تاريخ الدفع:</span>
+                                            <span class="summary-value">{{ $order->latestPaymentTransaction->paid_at?->format('Y-m-d H:i') ?? '--' }}</span>
+                                        </div>
+                                    @endif
+
                                     @if ($order->provider_order_id)
                                         <div class="summary-row" bis_skin_checked="1">
                                             <span class="summary-label">رقم طلب خارجي:</span>

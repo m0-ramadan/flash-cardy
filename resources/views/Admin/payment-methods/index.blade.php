@@ -566,7 +566,7 @@
                                             <div class="d-flex align-items-center gap-3">
                                                 <div class="icon-preview">
                                                     @if ($method->icon)
-                                                        @if (Str::startsWith($method->icon, 'http') || file_exists(public_path('storage/payment-methods/' . $method->icon)))
+                                                        @if ($method->hasImageIcon())
                                                             <img src="{{ $method->icon_url }}" alt="{{ $method->name }}">
                                                         @else
                                                             <i class="{{ $method->icon }}"></i>
@@ -587,7 +587,7 @@
                                         <td>
                                             @if ($method->icon)
                                                 <span class="badge bg-info">
-                                                    @if (Str::startsWith($method->icon, 'fas') || Str::startsWith($method->icon, 'fab'))
+                                                    @if ($method->hasFontAwesomeIcon())
                                                         <i class="{{ $method->icon }} me-1"></i>
                                                         أيقونة
                                                     @else

@@ -614,9 +614,9 @@
                                         </p>
                                         <small class="text-muted">الصيغ المدعومة: JPG, PNG, SVG</small>
 
-                                        @if ($paymentMethod->icon)
+                                        @if ($paymentMethod->hasImageIcon())
                                             <img id="imagePreview" class="image-preview mt-3"
-                                                src="{{ Storage::url($paymentMethod->icon) }}" alt="معاينة الصورة"
+                                                src="{{ $paymentMethod->icon_url }}" alt="معاينة الصورة"
                                                 style="display: block;">
                                         @else
                                             <img id="imagePreview" class="image-preview mt-3" alt="معاينة الصورة">
@@ -627,6 +627,14 @@
 
                                     </div>
                                     <div class="help-text">الحجم الموصى به: 100×100 بكسل</div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label for="icon_class" class="form-label">أو Font Awesome class</label>
+                                    <input type="text" class="form-control" id="icon_class" name="icon_class"
+                                        value="{{ old('icon_class', $paymentMethod->hasFontAwesomeIcon() ? $paymentMethod->icon : '') }}"
+                                        placeholder="fas fa-coins">
+                                    <small class="text-muted">عند إدخال class سيتم استخدامه بدل الصورة</small>
                                 </div>
 
                                 <!-- الإعدادات -->
@@ -655,6 +663,16 @@
                                             <small class="d-block text-muted">طريقة دفع فعلاً أم طريقة أخرى</small>
                                         </label>
                                     </div>
+
+                                    <div class="form-check form-switch mt-3">
+                                        <input class="form-check-input" type="checkbox" id="is_wallet"
+                                            name="is_wallet" value="1"
+                                            {{ old('is_wallet', $paymentMethod->is_wallet) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="is_wallet">
+                                            <strong style="color: var(--secondary-color);">محفظة</strong>
+                                            <small class="d-block text-muted">هل ترتبط الوسيلة بمحفظة؟</small>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -667,10 +685,16 @@
                                     </h6>
 
                                     <div class="preview-icon">
-                                        @if ($paymentMethod->icon)
-                                            <img id="previewImage" src="{{ Storage::url($paymentMethod->icon) }}"
+                                        @if ($paymentMethod->hasFontAwesomeIcon())
+                                            <span id="previewIconClass" class="{{ $paymentMethod->icon }}" style="font-size:32px;"></span>
+                                            <img id="previewImage" src="{{ asset('images/default-payment.png') }}"
+                                                alt="معاينة الأيقونة" style="display:none;">
+                                        @elseif ($paymentMethod->hasImageIcon())
+                                            <span id="previewIconClass" style="display:none;font-size:32px;"></span>
+                                            <img id="previewImage" src="{{ $paymentMethod->icon_url }}"
                                                 alt="معاينة الأيقونة">
                                         @else
+                                            <span id="previewIconClass" style="display:none;font-size:32px;"></span>
                                             <img id="previewImage" src="{{ asset('images/default-payment.png') }}"
                                                 alt="معاينة الأيقونة">
                                         @endif
@@ -748,6 +772,19 @@
             keyInput.addEventListener('input', function() {
                 document.getElementById('previewKey').textContent = this.value ||
                     '{{ $paymentMethod->key }}';
+            });
+
+            document.getElementById('icon_class').addEventListener('input', function() {
+                const icon = document.getElementById('previewIconClass');
+                const image = document.getElementById('previewImage');
+                if (this.value.trim()) {
+                    icon.className = this.value.trim();
+                    icon.style.display = 'inline-block';
+                    image.style.display = 'none';
+                } else {
+                    icon.style.display = 'none';
+                    image.style.display = 'block';
+                }
             });
 
             // تحديث حالة النشاط

@@ -2,22 +2,28 @@
 
 namespace App\Services\Payment\Wallet;
 
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 use App\Services\Wallet\ExchangeRateService;
-use App\Services\Payment\Wallet\PaymentGatewayInterface;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class PaymobService implements PaymentGatewayInterface
 {
-    private string $username;
-    private string $password;
-    private string $apiKey;
-    private string $integrationId;
-    private string $iframeId;
-    private string $hmacSecret;
+    private ?string $username;
+
+    private ?string $password;
+
+    private ?string $apiKey;
+
+    private ?string $integrationId;
+
+    private ?string $iframeId;
+
+    private ?string $hmacSecret;
+
     private string $baseUrl;
+
     private string $currency;
+
     private ExchangeRateService $exchangeRateService;
 
     public function __construct(ExchangeRateService $exchangeRateService)
@@ -28,7 +34,7 @@ class PaymobService implements PaymentGatewayInterface
         $this->integrationId = config('services.paymob.integration_id');
         $this->iframeId = config('services.paymob.iframe_id');
         $this->hmacSecret = config('services.paymob.hmac_secret');
-        $this->baseUrl = config('services.paymob.base_url');
+        $this->baseUrl = config('services.paymob.base_url', 'https://accept.paymob.com');
         $this->currency = config('services.paymob.currency', 'EGP');
         $this->exchangeRateService = $exchangeRateService;
     }
@@ -42,7 +48,7 @@ class PaymobService implements PaymentGatewayInterface
             $user = $data['user'];
             $amount = $data['amount'];
             $walletCurrency = $data['wallet_currency'] ?? 'EGP';
-            $orderId = $data['order_id'] ?? 'DEP-' . $amount . '-' . $walletCurrency . '-' . time();
+            $orderId = $data['order_id'] ?? 'DEP-'.$amount.'-'.$walletCurrency.'-'.time();
 
             // Convert amount if needed (للسعودية عادة لا نحتاج تحويل)
             if ($walletCurrency !== $this->currency) {
@@ -64,7 +70,7 @@ class PaymobService implements PaymentGatewayInterface
 
             // Get auth token using username/password (الطريقة الصحيحة لـ KSA)
             $authResult = $this->getAuthToken();
-            if (!$authResult['success']) {
+            if (! $authResult['success']) {
                 throw new \Exception($authResult['error']);
             }
 
@@ -78,7 +84,7 @@ class PaymobService implements PaymentGatewayInterface
                 $data['callback_url'] ?? null
             );
 
-            if (!$paymentLink['success']) {
+            if (! $paymentLink['success']) {
                 throw new \Exception($paymentLink['error'] ?? 'Failed to create payment link');
             }
 
@@ -94,19 +100,19 @@ class PaymobService implements PaymentGatewayInterface
                 'exchange_rate' => $exchangeRate,
                 'currency_original' => $walletCurrency,
                 'currency_charged' => $this->currency,
-                'expires_at' => now()->addHours(24)->toIso8601String()
+                'expires_at' => now()->addHours(24)->toIso8601String(),
             ];
         } catch (\Exception $e) {
             Log::error('Paymob KSA payment creation failed', [
                 'data' => $data,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
-                'error_code' => 'PAYMENT_CREATION_FAILED'
+                'error_code' => 'PAYMENT_CREATION_FAILED',
             ];
         }
     }
@@ -117,44 +123,44 @@ class PaymobService implements PaymentGatewayInterface
     private function getAuthToken(): array
     {
         try {
-            $response = Http::post($this->baseUrl . '/api/auth/tokens', [
+            $response = Http::post($this->baseUrl.'/api/auth/tokens', [
                 'api_key' => $this->apiKey,
             ]);
 
             if ($response->failed()) {
                 Log::error('Paymob EGP auth failed', [
                     'status' => $response->status(),
-                    'body' => $response->body()
+                    'body' => $response->body(),
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => 'Authentication failed: ' . $response->status()
+                    'error' => 'Authentication failed: '.$response->status(),
                 ];
             }
 
             $data = $response->json();
 
-            if (!isset($data['token'])) {
+            if (! isset($data['token'])) {
                 return [
                     'success' => false,
-                    'error' => 'No token in response'
+                    'error' => 'No token in response',
                 ];
             }
 
             return [
                 'success' => true,
                 'token' => $data['token'],
-                'profile_token' => $data['profile_token'] ?? null
+                'profile_token' => $data['profile_token'] ?? null,
             ];
         } catch (\Exception $e) {
             Log::error('Paymob KSA auth exception', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -171,7 +177,7 @@ class PaymobService implements PaymentGatewayInterface
                 'reference_id' => $orderId,
                 'payment_methods' => [$this->integrationId], // تأكد من أن هذا صحيح
                 'full_name' => isset($user->name) ? trim(preg_replace('/\d+/', '', $user->name)) : 'Customer',
-                'email' =>  'customer@talaaljazeera.com',
+                'email' => 'customer@talaaljazeera.com',
                 'phone_number' => $user->phone ?? $user->full_phone ?? '+966500000000',
                 'expires_at' => now()->setTimezone('Asia/Riyadh')->addHours(2)->format('Y-m-d\TH:i:s'),
                 'save_selection' => true,
@@ -185,19 +191,19 @@ class PaymobService implements PaymentGatewayInterface
             }
             $response = Http::withToken($authToken)
                 ->asForm()
-                ->post($this->baseUrl . '/api/ecommerce/payment-links', $payload);
+                ->post($this->baseUrl.'/api/ecommerce/payment-links', $payload);
 
             if ($response->failed()) {
                 Log::error('Paymob payment link creation failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
-                    'payload' => $payload
+                    'payload' => $payload,
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => 'Payment link creation failed: ' . $response->status(),
-                    'details' => $response->json()
+                    'error' => 'Payment link creation failed: '.$response->status(),
+                    'details' => $response->json(),
                 ];
             }
 
@@ -208,16 +214,16 @@ class PaymobService implements PaymentGatewayInterface
                 'payment_url' => $data['client_url'] ?? $data['shorten_url'] ?? null,
                 'shorten_url' => $data['shorten_url'] ?? null,
                 'token' => $data['token'] ?? null,
-                'id' => $data['id'] ?? null
+                'id' => $data['id'] ?? null,
             ];
         } catch (\Exception $e) {
             Log::error('Paymob payment link exception', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -229,7 +235,7 @@ class PaymobService implements PaymentGatewayInterface
     {
         try {
             // التحقق من HMAC
-            if (!$this->validateHmac($data)) {
+            if (! $this->validateHmac($data)) {
                 throw new \Exception('Invalid HMAC signature');
             }
 
@@ -244,12 +250,12 @@ class PaymobService implements PaymentGatewayInterface
             $orderId = $obj['merchant_reference'] ?? $obj['reference_id'] ?? null;
             $isCapture = $obj['is_capture'] ?? false;
 
-            if (!$success || !$isCapture) {
+            if (! $success || ! $isCapture) {
                 return [
                     'success' => false,
                     'error' => 'Payment not completed',
                     'error_code' => 'PAYMENT_INCOMPLETE',
-                    'transaction_id' => $transactionId
+                    'transaction_id' => $transactionId,
                 ];
             }
 
@@ -264,18 +270,18 @@ class PaymobService implements PaymentGatewayInterface
                 'currency_original' => $currency,
                 'exchange_rate' => 1,
                 'data' => $obj,
-                'verified_at' => now()->toIso8601String()
+                'verified_at' => now()->toIso8601String(),
             ];
         } catch (\Exception $e) {
             Log::error('Paymob verification failed', [
                 'data' => $data,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
-                'error_code' => 'VERIFICATION_FAILED'
+                'error_code' => 'VERIFICATION_FAILED',
             ];
         }
     }
@@ -285,7 +291,7 @@ class PaymobService implements PaymentGatewayInterface
      */
     private function validateHmac(array $data): bool
     {
-        if (!isset($data['hmac'])) {
+        if (! isset($data['hmac'])) {
             return false;
         }
 
@@ -320,7 +326,7 @@ class PaymobService implements PaymentGatewayInterface
         // Note: قد تحتاج لطريقة مختلفة لـ KSA
         return [
             'success' => false,
-            'error' => 'Refund not implemented for KSA Paymob'
+            'error' => 'Refund not implemented for KSA Paymob',
         ];
     }
 
@@ -331,14 +337,14 @@ class PaymobService implements PaymentGatewayInterface
     {
         try {
             $authResult = $this->getAuthToken();
-            if (!$authResult['success']) {
+            if (! $authResult['success']) {
                 throw new \Exception($authResult['error']);
             }
 
             $response = Http::withToken($authResult['token'])
-                ->get($this->baseUrl . "/api/acceptance/transactions/{$transactionId}");
+                ->get($this->baseUrl."/api/acceptance/transactions/{$transactionId}");
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new \Exception('Failed to get transaction status');
             }
 
@@ -347,12 +353,12 @@ class PaymobService implements PaymentGatewayInterface
             return [
                 'success' => true,
                 'status' => $data['success'] ? 'success' : 'failed',
-                'data' => $data
+                'data' => $data,
             ];
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }

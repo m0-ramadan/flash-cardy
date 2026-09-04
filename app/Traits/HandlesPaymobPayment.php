@@ -2,7 +2,6 @@
 
 namespace App\Traits;
 
-use Log;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -10,46 +9,55 @@ use Illuminate\Support\Facades\Http;
 trait HandlesPaymobPayment
 {
     /**
-     * بدء عملية الدفع عبر PayMob KSA باستخدام Payment Links (الطريقة الجديدة والموصى بها)
+     * بدء عملية الدفع عبر Paymob Egypt Unified Checkout.
      */
     public function initiatePaymobPayment($order)
     {
-        // 1. Authentication
-        $auth = $this->paymobAuthenticate();
-        if (!$auth['success']) {
-            return response()->json($auth, 400);
-        }
+        $intention = $this->createPaymobIntention($order);
 
-        // 2. Create Payment Link
-        $paymentLink = $this->createPaymobPaymentLink($auth['token'], $order);
-
-        if (!$paymentLink['success']) {
+        if (! $intention['success']) {
             return [
                 'success' => false,
-                'message' => 'فشل إنشاء رابط الدفع',
-                'error_details' => $paymentLink, // إظهار كل تفاصيل الخطأ
+                'message' => $intention['message'] ?? 'فشل إنشاء عملية الدفع',
+                'error_details' => $intention,
             ];
         }
 
+        $paymentUrl = $this->buildPaymobUnifiedCheckoutUrl($intention['client_secret']);
 
-        // نجح كل شيء → نرجع رابط الدفع للموبايل
+        $order->update([
+            'transaction_id' => $intention['intention_id'] ?? null,
+            'status_payment' => 'pending',
+            'provider_response' => $intention['provider_response'] ?? null,
+        ]);
+
         return [
-            'success'      => true,
-            'payment_url'  => $paymentLink['payment_url'],
-            'shorten_url'  => $paymentLink['shorten_url'] ?? null,
+            'success' => true,
+            'payment_url' => $paymentUrl,
+            'shorten_url' => null,
             'order_number' => $order->order_number,
-            'message'      => 'تم إنشاء رابط الدفع بنجاح'
+            'client_secret' => $intention['client_secret'],
+            'intention_id' => $intention['intention_id'] ?? null,
+            'message' => 'تم إنشاء رابط الدفع بنجاح',
         ];
     }
 
     /**
-     * تسجيل الدخول وجلب التوكن
+     * تسجيل الدخول وجلب التوكن - kept for old API compatibility.
      */
     private function paymobAuthenticate(): array
     {
-        $response = Http::post('https://accept.paymob.com/api/auth/tokens', [
-            'username' => config('services.paymob.username'),
-            'password' => config('services.paymob.password'),
+        $apiKey = $this->paymobSetting('api_key', 'PAYMOB_API_KEY');
+
+        if (! $apiKey) {
+            return [
+                'success' => false,
+                'message' => 'Paymob API key is not configured.',
+            ];
+        }
+
+        $response = Http::asJson()->post($this->paymobUrl('/api/auth/tokens'), [
+            'api_key' => $apiKey,
         ]);
 
         if ($response->failed()) {
@@ -62,54 +70,213 @@ trait HandlesPaymobPayment
 
         return [
             'success' => true,
-            'token'   => $response->json('token'),
+            'token' => $response->json('token'),
         ];
     }
 
     /**
-     * إنشاء رابط دفع PayMob (الطريقة الصحيحة الجديدة)
+     * إنشاء Intention للبوابة المصرية ثم استخدام client_secret في Unified Checkout.
      */
-    private function createPaymobPaymentLink($token, $order)
+    private function createPaymobIntention(Order $order): array
     {
-        $amountInCents = max(100, (int) round(($order->total_amount ?? 0) * 100));
+        $secretKey = $this->paymobSetting('secret_key', 'PAYMOB_SECRET_KEY');
+        $publicKey = $this->paymobSetting('public_key', 'PAYMOB_PUBLIC_KEY');
+        $integrationId = $this->paymobSetting('integration_id', 'PAYMOB_INTEGRATION_ID');
 
-        $response = Http::withToken($token)
-            ->asForm()
-            ->post('https://accept.paymob.com/api/ecommerce/payment-links', [
-                'amount_cents'     => $amountInCents,
-                'currency'         => 'EGP',
-                'reference_id'     => $order->order_number,
-                'payment_methods'  => [config('services.paymob.integration_id')],
-                'full_name'        => $order->customer_name,
-                'email'            => $order->customer_email ?? 'customer@example.com',
-                'phone_number'     => $order->customer_phone,
-                'expires_at'       => now()->setTimezone('Asia/Riyadh')->addHours(2)->format('Y-m-d\TH:i:s'),
-                'save_selection'   => true,
-                'is_live'          => config('services.paymob.mode') === 'live',
+        if (! $secretKey || ! $publicKey || ! $integrationId) {
+            return [
+                'success' => false,
+                'message' => 'Paymob secret key, public key, or integration id is not configured.',
+            ];
+        }
 
-                // URLs مهمة جدًا
-                //   'redirect_url'     => url("/payment/success/{$order->order_number}"),
-                'redirect_url' => "https://ecommerce-xo.vercel.app/payment-status?status=success&orderId={$order->order_number}",
-                'cancel_url'   => url("/payment-status?status=failed&orderId={$order->order_number}"),
+        $amountInCents = max(100, (int) round(((float) $order->total_amount) * 100));
+        $currency = strtoupper((string) $this->paymobSetting('currency', 'PAYMOB_CURRENCY', 'EGP'));
+        $customerName = trim((string) ($order->customer_name ?: 'Flashicard Customer'));
+        [$firstName, $lastName] = $this->splitPaymobName($customerName);
 
-                // Webhook بيجي من الداشبورد، بس ممكن تبعته كمان
-                'callback_url' => url('/api/v1/paymob/webhook'),
-            ]);
+        $payload = [
+            'amount' => $amountInCents,
+            'currency' => $currency,
+            'payment_methods' => [(int) $integrationId],
+            'items' => [[
+                'name' => 'Order '.$order->order_number,
+                'amount' => $amountInCents,
+                'description' => 'Flashicard order '.$order->order_number,
+                'quantity' => 1,
+            ]],
+            'billing_data' => [
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $order->customer_email ?: 'customer@example.com',
+                'phone_number' => $this->normalizePaymobPhone($order->customer_phone),
+                'country' => 'EG',
+                'city' => 'Cairo',
+                'state' => 'Cairo',
+                'postal_code' => '00000',
+                'street' => 'NA',
+                'building' => 'NA',
+                'floor' => 'NA',
+                'apartment' => 'NA',
+            ],
+            'customer' => [
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $order->customer_email ?: 'customer@example.com',
+                'extras' => [
+                    'order_number' => $order->order_number,
+                ],
+            ],
+            'extras' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+            ],
+            'special_reference' => $order->order_number,
+            'notification_url' => $this->paymobCallbackUrl(),
+            'redirection_url' => $this->paymobReturnUrl($order),
+            'expiration' => 3600,
+        ];
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Token '.$secretKey,
+            'Content-Type' => 'application/json',
+        ])->acceptJson()->asJson()->post($this->paymobUrl('/v1/intention/'), $payload);
+
         if ($response->failed()) {
             return [
                 'success' => false,
-                'message' => 'فشل إنشاء رابط الدفع',
-                'error'   => $response->json(),
+                'message' => 'فشل إنشاء نية الدفع في Paymob',
+                'http_status' => $response->status(),
+                'request' => $payload,
+                'error' => $response->json() ?: $response->body(),
             ];
         }
+
         $data = $response->json();
 
-        return [
-            'success'      => true,
-            'payment_url'  => $data['client_url'] ?? $data['shorten_url'] ?? null,
-            'shorten_url'  => $data['shorten_url'] ?? null,
+        if (! is_array($data) || empty($data['client_secret'])) {
+            return [
+                'success' => false,
+                'message' => 'استجابة Paymob لا تحتوي على client_secret',
+                'provider_response' => $data,
+            ];
+        }
 
+        return [
+            'success' => true,
+            'client_secret' => $data['client_secret'],
+            'intention_id' => $data['id'] ?? $data['intention_order_id'] ?? null,
+            'provider_response' => $data,
         ];
+    }
+
+    private function createPaymobPaymentLink($token, $order)
+    {
+        return $this->createPaymobIntention($order);
+    }
+
+    private function buildPaymobUnifiedCheckoutUrl(string $clientSecret): string
+    {
+        return $this->paymobUrl('/unifiedcheckout/').'?'.http_build_query([
+            'publicKey' => $this->paymobSetting('public_key', 'PAYMOB_PUBLIC_KEY'),
+            'clientSecret' => $clientSecret,
+        ]);
+    }
+
+    private function paymobCallbackUrl(): string
+    {
+        return (string) ($this->paymobSetting('callback_url', 'PAYMOB_CALLBACK_URL') ?: url('/api/paymob/webhook'));
+    }
+
+    private function paymobReturnUrl(Order $order): string
+    {
+        $baseUrl = (string) ($this->paymobSetting('return_url', 'PAYMOB_RETURN_URL') ?: url('/payment-status'));
+
+        return $baseUrl.(str_contains($baseUrl, '?') ? '&' : '?').http_build_query([
+            'orderId' => $order->order_number,
+        ]);
+    }
+
+    private function paymobUrl(string $path): string
+    {
+        $baseUrl = rtrim((string) $this->paymobSetting('base_url', 'PAYMOB_BASE_URL', 'https://accept.paymob.com'), '/');
+
+        return $baseUrl.'/'.ltrim($path, '/');
+    }
+
+    private function splitPaymobName(string $name): array
+    {
+        $parts = preg_split('/\s+/', trim($name), 2) ?: [];
+
+        return [
+            $parts[0] ?? 'Customer',
+            $parts[1] ?? 'Flashicard',
+        ];
+    }
+
+    private function normalizePaymobPhone(?string $phone): string
+    {
+        $phone = preg_replace('/[^\d+]/', '', (string) $phone);
+
+        return $phone !== '' ? $phone : '01000000000';
+    }
+
+    private function paymobSetting(string $configKey, string $envKey, mixed $default = null): mixed
+    {
+        $value = $_ENV[$envKey] ?? $_SERVER[$envKey] ?? getenv($envKey);
+
+        if ($value !== false && $value !== null && $value !== '') {
+            return $this->normalizePaymobEnvValue((string) $value);
+        }
+
+        $value = $this->readPaymobEnvFileValue($envKey);
+
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        $value = config('services.paymob.'.$configKey);
+
+        return $value !== null && $value !== '' ? $value : $default;
+    }
+
+    private function readPaymobEnvFileValue(string $key): ?string
+    {
+        $path = base_path('.env');
+
+        if (! is_readable($path)) {
+            return null;
+        }
+
+        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+
+            [$name, $value] = explode('=', $line, 2);
+
+            if (trim($name) === $key) {
+                return $this->normalizePaymobEnvValue($value);
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizePaymobEnvValue(string $value): string
+    {
+        $value = trim($value);
+
+        if (
+            (str_starts_with($value, '"') && str_ends_with($value, '"'))
+            || (str_starts_with($value, "'") && str_ends_with($value, "'"))
+        ) {
+            return substr($value, 1, -1);
+        }
+
+        return $value;
     }
 
     /**

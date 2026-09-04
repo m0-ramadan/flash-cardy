@@ -2,42 +2,59 @@
 
 namespace App\Services\Wallet;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class ExchangeRateService
 {
     private string $provider;
-    private string $apiKey;
+
+    private ?string $apiKey;
+
     private int $cacheTtl;
+
     private array $fallbackRates;
+
     private bool $isLive;
 
     const PROVIDER_OPENEXCHANGERATES = 'openexchangerates';
+
     const PROVIDER_FIXER = 'fixer';
+
     const PROVIDER_EXCHANGERATE_API = 'exchangerate_api';
+
     const PROVIDER_CURRENCY_LAYER = 'currency_layer';
 
     const CURRENCY_SAR = 'SAR';  // الريال السعودي
+
     const CURRENCY_EGP = 'EGP';  // الجنيه المصري
+
     const CURRENCY_USD = 'USD';  // الدولار الأمريكي
+
     const CURRENCY_EUR = 'EUR';  // اليورو
+
     const CURRENCY_AED = 'AED';  // الدرهم الإماراتي
+
     const CURRENCY_QAR = 'QAR';  // الريال القطري
+
     const CURRENCY_OMR = 'OMR';  // الريال العماني
+
     const CURRENCY_KWD = 'KWD';  // الدينار الكويتي
+
     const CURRENCY_BHD = 'BHD';  // الدينار البحريني
+
     const CURRENCY_JOD = 'JOD';  // الدينار الأردني
 
     public function __construct()
     {
-        $this->provider = config('wallet.exchange_rate.provider', self::PROVIDER_OPENEXCHANGERATES);
-        $this->apiKey = config('wallet.exchange_rate.api_key', 'd91b3f8e6f1b4e7597edd192e54d3cfe');
-        $this->cacheTtl = config('wallet.exchange_rate.cache_ttl', 3600);
-        $this->isLive = config('wallet.exchange_rate.live_mode', false);
+        $this->provider = config('wallet.exchange_rate.provider', env('EXCHANGE_RATE_PROVIDER', self::PROVIDER_EXCHANGERATE_API));
+        $this->apiKey = config('wallet.exchange_rate.api_key', env('EXCHANGE_RATE_API_KEY'));
+        $this->cacheTtl = (int) config('wallet.exchange_rate.cache_ttl', env('EXCHANGE_RATE_CACHE_TTL', 3600));
+        $this->isLive = filter_var(config('wallet.exchange_rate.live_mode', env('EXCHANGE_RATE_LIVE_MODE', true)), FILTER_VALIDATE_BOOLEAN);
         $this->fallbackRates = $this->loadFallbackRates();
     }
 
@@ -126,11 +143,17 @@ class ExchangeRateService
                 'from' => $fromCurrency,
                 'to' => $toCurrency,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            // استخدام السعر الافتراضي في حالة الفشل
-            return $this->convertWithFallback($amount, $fromCurrency, $toCurrency);
+            return [
+                'success' => false,
+                'message' => 'تعذر الحصول على سعر صرف مباشر موثوق',
+                'original_amount' => $amount,
+                'from_currency' => $fromCurrency,
+                'to_currency' => $toCurrency,
+                'error' => $e->getMessage(),
+            ];
         }
     }
 
@@ -149,7 +172,7 @@ class ExchangeRateService
         }
 
         // مفتاح التخزين المؤقت
-        $cacheKey = "exchange_rate_{$fromCurrency}_{$toCurrency}_" . date('YmdH');
+        $cacheKey = "exchange_rate_{$fromCurrency}_{$toCurrency}_".date('YmdH');
 
         // محاولة الحصول من التخزين المؤقت
         return Cache::remember($cacheKey, $this->cacheTtl, function () use ($fromCurrency, $toCurrency) {
@@ -163,9 +186,8 @@ class ExchangeRateService
     private function fetchExchangeRate(string $fromCurrency, string $toCurrency): float
     {
         try {
-            // إذا كان النظام غير متصل بالإنترنت
-            if (!$this->isLive) {
-                return $this->getFallbackRate($fromCurrency, $toCurrency);
+            if (! $this->isLive) {
+                throw new \Exception('Live exchange rates are disabled');
             }
 
             switch ($this->provider) {
@@ -182,17 +204,17 @@ class ExchangeRateService
                     return $this->fetchFromCurrencyLayer($fromCurrency, $toCurrency);
 
                 default:
-                    return $this->getFallbackRate($fromCurrency, $toCurrency);
+                    throw new \Exception("Unsupported exchange rate provider: {$this->provider}");
             }
         } catch (\Exception $e) {
             Log::warning('Failed to fetch exchange rate from provider', [
                 'provider' => $this->provider,
                 'from' => $fromCurrency,
                 'to' => $toCurrency,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
-            return $this->getFallbackRate($fromCurrency, $toCurrency);
+            throw $e;
         }
     }
 
@@ -201,20 +223,24 @@ class ExchangeRateService
      */
     private function fetchFromOpenExchangeRates(string $fromCurrency, string $toCurrency): float
     {
+        if (empty($this->apiKey)) {
+            throw new \Exception('OpenExchangeRates API key is not configured');
+        }
+
         $response = Http::retry(3, 100)->get('https://openexchangerates.org/api/latest.json', [
             'app_id' => $this->apiKey,
             'base' => $fromCurrency,
             'symbols' => $toCurrency,
-            'show_alternative' => false
+            'show_alternative' => false,
         ]);
 
-        if (!$response->successful()) {
-            throw new \Exception('OpenExchangeRates API failed: ' . $response->status());
+        if (! $response->successful()) {
+            throw new \Exception('OpenExchangeRates API failed: '.$response->status());
         }
 
         $data = $response->json();
 
-        if (!isset($data['rates'][$toCurrency])) {
+        if (! isset($data['rates'][$toCurrency])) {
             throw new \Exception("Rate for {$toCurrency} not found");
         }
 
@@ -231,20 +257,24 @@ class ExchangeRateService
      */
     private function fetchFromFixer(string $fromCurrency, string $toCurrency): float
     {
+        if (empty($this->apiKey)) {
+            throw new \Exception('Fixer API key is not configured');
+        }
+
         $response = Http::retry(3, 100)->get('http://data.fixer.io/api/latest', [
             'access_key' => $this->apiKey,
             'base' => $fromCurrency,
-            'symbols' => $toCurrency
+            'symbols' => $toCurrency,
         ]);
 
-        if (!$response->successful()) {
-            throw new \Exception('Fixer API failed: ' . $response->status());
+        if (! $response->successful()) {
+            throw new \Exception('Fixer API failed: '.$response->status());
         }
 
         $data = $response->json();
 
-        if (!$data['success'] || !isset($data['rates'][$toCurrency])) {
-            throw new \Exception("Fixer API error: " . ($data['error']['info'] ?? 'Unknown error'));
+        if (! $data['success'] || ! isset($data['rates'][$toCurrency])) {
+            throw new \Exception('Fixer API error: '.($data['error']['info'] ?? 'Unknown error'));
         }
 
         $rate = $data['rates'][$toCurrency];
@@ -260,13 +290,13 @@ class ExchangeRateService
     {
         $response = Http::retry(3, 100)->get("https://api.exchangerate-api.com/v4/latest/{$fromCurrency}");
 
-        if (!$response->successful()) {
-            throw new \Exception('ExchangeRate-API failed: ' . $response->status());
+        if (! $response->successful()) {
+            throw new \Exception('ExchangeRate-API failed: '.$response->status());
         }
 
         $data = $response->json();
 
-        if (!isset($data['rates'][$toCurrency])) {
+        if (! isset($data['rates'][$toCurrency])) {
             throw new \Exception("Rate for {$toCurrency} not found");
         }
 
@@ -281,21 +311,25 @@ class ExchangeRateService
      */
     private function fetchFromCurrencyLayer(string $fromCurrency, string $toCurrency): float
     {
+        if (empty($this->apiKey)) {
+            throw new \Exception('Currency Layer API key is not configured');
+        }
+
         $response = Http::retry(3, 100)->get('http://apilayer.net/api/live', [
             'access_key' => $this->apiKey,
             'currencies' => "{$fromCurrency},{$toCurrency}",
             'source' => $fromCurrency,
-            'format' => 1
+            'format' => 1,
         ]);
 
-        if (!$response->successful()) {
-            throw new \Exception('Currency Layer API failed: ' . $response->status());
+        if (! $response->successful()) {
+            throw new \Exception('Currency Layer API failed: '.$response->status());
         }
 
         $data = $response->json();
 
-        if (!$data['success'] || !isset($data['quotes']["{$fromCurrency}{$toCurrency}"])) {
-            throw new \Exception("Currency Layer API error: " . ($data['error']['info'] ?? 'Unknown error'));
+        if (! $data['success'] || ! isset($data['quotes']["{$fromCurrency}{$toCurrency}"])) {
+            throw new \Exception('Currency Layer API error: '.($data['error']['info'] ?? 'Unknown error'));
         }
 
         $rate = $data['quotes']["{$fromCurrency}{$toCurrency}"];
@@ -321,7 +355,7 @@ class ExchangeRateService
         // إذا لم يكن هناك سعر افتراضي
         Log::critical('No fallback rate available', [
             'from' => $fromCurrency,
-            'to' => $toCurrency
+            'to' => $toCurrency,
         ]);
 
         throw new \Exception("No exchange rate available for {$fromCurrency} to {$toCurrency}");
@@ -340,7 +374,7 @@ class ExchangeRateService
             'from' => $fromCurrency,
             'to' => $toCurrency,
             'rate' => $rate,
-            'converted' => $convertedAmount
+            'converted' => $convertedAmount,
         ]);
 
         return $this->createConversionResult(
@@ -376,7 +410,7 @@ class ExchangeRateService
             'rate_source' => $isFallback ? 'fallback' : $this->provider,
             'inverse_rate' => round(1 / $exchangeRate, 6),
             'fee_percentage' => $this->calculateConversionFee($originalAmount, $fromCurrency, $toCurrency),
-            'net_amount' => $this->calculateNetAmount($originalAmount, $convertedAmount, $fromCurrency, $toCurrency)
+            'net_amount' => $this->calculateNetAmount($originalAmount, $convertedAmount, $fromCurrency, $toCurrency),
         ];
     }
 
@@ -412,7 +446,7 @@ class ExchangeRateService
     {
         $supportedCurrencies = $this->getSupportedCurrencies();
 
-        if (!isset($supportedCurrencies[$currency])) {
+        if (! isset($supportedCurrencies[$currency])) {
             throw new \Exception("Unsupported currency: {$currency}");
         }
     }
@@ -428,70 +462,70 @@ class ExchangeRateService
                 'symbol' => 'ج.م',
                 'decimal_places' => 2,
                 'is_active' => true,
-                'is_default' => true
+                'is_default' => true,
             ],
             self::CURRENCY_EGP => [
                 'name' => 'الجنيه المصري',
                 'symbol' => 'ج.م',
                 'decimal_places' => 2,
                 'is_active' => true,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_USD => [
                 'name' => 'الدولار الأمريكي',
                 'symbol' => '$',
                 'decimal_places' => 2,
                 'is_active' => true,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_EUR => [
                 'name' => 'اليورو',
                 'symbol' => '€',
                 'decimal_places' => 2,
                 'is_active' => true,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_AED => [
                 'name' => 'الدرهم الإماراتي',
                 'symbol' => 'د.إ',
                 'decimal_places' => 2,
                 'is_active' => true,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_QAR => [
                 'name' => 'الريال القطري',
                 'symbol' => 'ر.ق',
                 'decimal_places' => 2,
                 'is_active' => false,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_OMR => [
                 'name' => 'الريال العماني',
                 'symbol' => 'ر.ع.',
                 'decimal_places' => 3,
                 'is_active' => false,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_KWD => [
                 'name' => 'الدينار الكويتي',
                 'symbol' => 'د.ك',
                 'decimal_places' => 3,
                 'is_active' => false,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_BHD => [
                 'name' => 'الدينار البحريني',
                 'symbol' => 'د.ب',
                 'decimal_places' => 3,
                 'is_active' => false,
-                'is_default' => false
+                'is_default' => false,
             ],
             self::CURRENCY_JOD => [
                 'name' => 'الدينار الأردني',
                 'symbol' => 'د.أ',
                 'decimal_places' => 3,
                 'is_active' => false,
-                'is_default' => false
+                'is_default' => false,
             ],
         ];
     }
@@ -506,6 +540,7 @@ class ExchangeRateService
         foreach ($targetCurrencies as $targetCurrency) {
             if ($baseCurrency === $targetCurrency) {
                 $rates[$targetCurrency] = 1.0;
+
                 continue;
             }
 
@@ -516,7 +551,7 @@ class ExchangeRateService
                 Log::warning('Failed to get bulk exchange rate', [
                     'base' => $baseCurrency,
                     'target' => $targetCurrency,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
 
                 $rates[$targetCurrency] = null;
@@ -527,7 +562,7 @@ class ExchangeRateService
             'base_currency' => $baseCurrency,
             'rates' => $rates,
             'fetched_at' => now()->toIso8601String(),
-            'provider' => $this->provider
+            'provider' => $this->provider,
         ];
     }
 
@@ -549,7 +584,7 @@ class ExchangeRateService
                 $results[] = [
                     'success' => true,
                     'conversion_id' => $conversion['id'] ?? $index,
-                    'data' => $result
+                    'data' => $result,
                 ];
             } catch (\Exception $e) {
                 $results[] = [
@@ -558,17 +593,17 @@ class ExchangeRateService
                     'error' => $e->getMessage(),
                     'amount' => $conversion['amount'],
                     'from_currency' => $conversion['from_currency'],
-                    'to_currency' => $conversion['to_currency']
+                    'to_currency' => $conversion['to_currency'],
                 ];
             }
         }
 
         return [
             'total_conversions' => count($conversions),
-            'successful' => count(array_filter($results, fn($r) => $r['success'])),
-            'failed' => count(array_filter($results, fn($r) => !$r['success'])),
+            'successful' => count(array_filter($results, fn ($r) => $r['success'])),
+            'failed' => count(array_filter($results, fn ($r) => ! $r['success'])),
             'results' => $results,
-            'processed_at' => now()->toIso8601String()
+            'processed_at' => now()->toIso8601String(),
         ];
     }
 
@@ -582,18 +617,31 @@ class ExchangeRateService
         string $toCurrency,
         float $exchangeRate
     ): void {
-        DB::table('exchange_rate_logs')->insert([
-            'from_currency' => $fromCurrency,
-            'to_currency' => $toCurrency,
-            'original_amount' => $originalAmount,
-            'converted_amount' => $convertedAmount,
-            'exchange_rate' => $exchangeRate,
-            'provider' => $this->provider,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
+        if (! $this->tableExists('exchange_rate_logs')) {
+            return;
+        }
+
+        try {
+            DB::table('exchange_rate_logs')->insert([
+                'from_currency' => $fromCurrency,
+                'to_currency' => $toCurrency,
+                'original_amount' => $originalAmount,
+                'converted_amount' => $convertedAmount,
+                'exchange_rate' => $exchangeRate,
+                'provider' => $this->provider,
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to store exchange rate conversion log', [
+                'from' => $fromCurrency,
+                'to' => $toCurrency,
+                'provider' => $this->provider,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -601,18 +649,31 @@ class ExchangeRateService
      */
     private function storeRateInDatabase(string $fromCurrency, string $toCurrency, float $rate, string $provider): void
     {
-        DB::table('exchange_rates')->insert([
-            'from_currency' => $fromCurrency,
-            'to_currency' => $toCurrency,
-            'rate' => $rate,
-            'provider' => $provider,
-            'source' => 'api',
-            'is_live' => true,
-            'valid_from' => now(),
-            'valid_to' => now()->addHours(24),
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
+        if (! $this->tableExists('exchange_rates')) {
+            return;
+        }
+
+        try {
+            DB::table('exchange_rates')->insert([
+                'from_currency' => $fromCurrency,
+                'to_currency' => $toCurrency,
+                'rate' => $rate,
+                'provider' => $provider,
+                'source' => 'api',
+                'is_live' => true,
+                'valid_from' => now(),
+                'valid_to' => now()->addHours(24),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to store exchange rate snapshot', [
+                'from' => $fromCurrency,
+                'to' => $toCurrency,
+                'provider' => $provider,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -630,7 +691,7 @@ class ExchangeRateService
                         [
                             'from_currency' => $fromCurrency,
                             'to_currency' => $toCurrency,
-                            'provider' => 'fallback'
+                            'provider' => 'fallback',
                         ],
                         [
                             'rate' => $rate,
@@ -638,7 +699,7 @@ class ExchangeRateService
                             'is_live' => false,
                             'valid_from' => now(),
                             'valid_to' => now()->addDays(30),
-                            'updated_at' => now()
+                            'updated_at' => now(),
                         ]
                     );
                 }
@@ -648,11 +709,26 @@ class ExchangeRateService
             Cache::tags(['exchange_rates'])->flush();
 
             Log::info('Fallback rates updated successfully');
+
             return true;
         } catch (\Exception $e) {
             Log::error('Failed to update fallback rates', [
                 'error' => $e->getMessage(),
-                'rates' => $newRates
+                'rates' => $newRates,
+            ]);
+
+            return false;
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            return Schema::hasTable($table);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to inspect database table', [
+                'table' => $table,
+                'error' => $e->getMessage(),
             ]);
 
             return false;
@@ -698,11 +774,12 @@ class ExchangeRateService
             $response = Http::get("https://openexchangerates.org/api/historical/{$date}.json", [
                 'app_id' => $this->apiKey,
                 'base' => $fromCurrency,
-                'symbols' => $toCurrency
+                'symbols' => $toCurrency,
             ]);
 
             if ($response->successful()) {
                 $data = $response->json();
+
                 return $data['rates'][$toCurrency] ?? null;
             }
         } catch (\Exception $e) {
@@ -710,7 +787,7 @@ class ExchangeRateService
                 'date' => $date,
                 'from' => $fromCurrency,
                 'to' => $toCurrency,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -761,7 +838,7 @@ class ExchangeRateService
             'max_rate' => max($rateValues),
             'rate_change' => round(($lastRate - $firstRate) / $firstRate * 100, 2),
             'data_points' => $rates->count(),
-            'monitored_at' => now()->toIso8601String()
+            'monitored_at' => now()->toIso8601String(),
         ];
     }
 
@@ -783,7 +860,7 @@ class ExchangeRateService
                 'status' => 'healthy',
                 'response_time_ms' => $responseTime,
                 'rate' => $rate,
-                'checked_at' => now()->toIso8601String()
+                'checked_at' => now()->toIso8601String(),
             ];
         } catch (\Exception $e) {
             return [
@@ -791,7 +868,7 @@ class ExchangeRateService
                 'status' => 'unhealthy',
                 'error' => $e->getMessage(),
                 'response_time_ms' => round((microtime(true) - $startTime) * 1000, 2),
-                'checked_at' => now()->toIso8601String()
+                'checked_at' => now()->toIso8601String(),
             ];
         }
     }
@@ -799,16 +876,16 @@ class ExchangeRateService
     /**
      * تبديل مزود الخدمة
      */
-    public function switchProvider(string $newProvider, string $apiKey = null): bool
+    public function switchProvider(string $newProvider, ?string $apiKey = null): bool
     {
         $supportedProviders = [
             self::PROVIDER_OPENEXCHANGERATES,
             self::PROVIDER_FIXER,
             self::PROVIDER_EXCHANGERATE_API,
-            self::PROVIDER_CURRENCY_LAYER
+            self::PROVIDER_CURRENCY_LAYER,
         ];
 
-        if (!in_array($newProvider, $supportedProviders)) {
+        if (! in_array($newProvider, $supportedProviders)) {
             throw new \Exception("Unsupported provider: {$newProvider}");
         }
 
@@ -825,6 +902,7 @@ class ExchangeRateService
         if ($validation['status'] !== 'healthy') {
             // العودة للمزود القديم إذا فشل
             $this->provider = $oldProvider;
+
             return false;
         }
 
@@ -840,7 +918,7 @@ class ExchangeRateService
         Log::info('Exchange rate provider switched', [
             'from' => $oldProvider,
             'to' => $newProvider,
-            'validation' => $validation
+            'validation' => $validation,
         ]);
 
         return true;
@@ -858,7 +936,7 @@ class ExchangeRateService
                 DB::raw('SUM(original_amount) as total_amount'),
                 DB::raw('AVG(exchange_rate) as avg_rate'),
                 DB::raw('GROUP_CONCAT(DISTINCT from_currency) as from_currencies'),
-                DB::raw('GROUP_CONCAT(DISTINCT to_currency) as to_currencies')
+                DB::raw('GROUP_CONCAT(DISTINCT to_currency) as to_currencies'),
             ])
             ->where('created_at', '>=', now()->subDays($days))
             ->groupBy('date')
@@ -877,7 +955,7 @@ class ExchangeRateService
             'most_used_from_currency' => $this->getMostUsedCurrency($statistics, 'from_currencies'),
             'most_used_to_currency' => $this->getMostUsedCurrency($statistics, 'to_currencies'),
             'daily_statistics' => $statistics,
-            'generated_at' => now()->toIso8601String()
+            'generated_at' => now()->toIso8601String(),
         ];
     }
 
@@ -900,6 +978,7 @@ class ExchangeRateService
         }
 
         arsort($currencyCounts);
+
         return array_key_first($currencyCounts);
     }
 
@@ -923,14 +1002,14 @@ class ExchangeRateService
         foreach ($conversions as $conversion) {
             $key = "{$conversion->from_currency}_{$conversion->to_currency}";
 
-            if (!isset($currencyAnalysis[$key])) {
+            if (! isset($currencyAnalysis[$key])) {
                 $currencyAnalysis[$key] = [
                     'from_currency' => $conversion->from_currency,
                     'to_currency' => $conversion->to_currency,
                     'count' => 0,
                     'total_amount' => 0,
                     'avg_rate' => 0,
-                    'rates' => []
+                    'rates' => [],
                 ];
             }
 
@@ -955,7 +1034,7 @@ class ExchangeRateService
             'most_active_day' => $this->getMostActiveDay($conversions),
             'currency_analysis' => array_values($currencyAnalysis),
             'top_conversion_pair' => $this->getTopConversionPair($currencyAnalysis),
-            'generated_at' => now()->toIso8601String()
+            'generated_at' => now()->toIso8601String(),
         ];
     }
 
@@ -969,11 +1048,11 @@ class ExchangeRateService
         foreach ($conversions as $conversion) {
             $date = $conversion->created_at->toDateString();
 
-            if (!isset($dailyConversions[$date])) {
+            if (! isset($dailyConversions[$date])) {
                 $dailyConversions[$date] = [
                     'date' => $date,
                     'count' => 0,
-                    'total_amount' => 0
+                    'total_amount' => 0,
                 ];
             }
 
@@ -1039,23 +1118,23 @@ class ExchangeRateService
             Log::info('Old exchange rate data cleaned up', [
                 'logs_deleted' => $logsDeleted,
                 'rates_deleted' => $ratesDeleted,
-                'cutoff_date' => $cutoffDate
+                'cutoff_date' => $cutoffDate,
             ]);
 
             return [
                 'success' => true,
                 'logs_deleted' => $logsDeleted,
                 'rates_deleted' => $ratesDeleted,
-                'message' => 'تم تنظيف البيانات القديمة بنجاح'
+                'message' => 'تم تنظيف البيانات القديمة بنجاح',
             ];
         } catch (\Exception $e) {
             Log::error('Failed to cleanup old exchange rate logs', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -1067,8 +1146,8 @@ class ExchangeRateService
     {
         // مسح مفاتيح التخزين المؤقت القديمة (أقدم من 7 أيام)
         $oldKeys = [
-            'exchange_rate_*_' . now()->subDays(7)->format('YmdH'),
-            'historical_rate_*_' . now()->subDays(30)->format('Y-m-d')
+            'exchange_rate_*_'.now()->subDays(7)->format('YmdH'),
+            'historical_rate_*_'.now()->subDays(30)->format('Y-m-d'),
         ];
 
         foreach ($oldKeys as $pattern) {
@@ -1086,7 +1165,7 @@ class ExchangeRateService
             $targetCurrencies = array_diff($supportedCurrencies, [$baseCurrency]);
         }
 
-        $cacheKey = "preloaded_rates_{$baseCurrency}_" . date('YmdH');
+        $cacheKey = "preloaded_rates_{$baseCurrency}_".date('YmdH');
 
         return Cache::remember($cacheKey, $this->cacheTtl, function () use ($baseCurrency, $targetCurrencies) {
             $rates = [];
@@ -1115,7 +1194,7 @@ class ExchangeRateService
             } catch (\Exception $e) {
                 Log::warning('Failed to preload exchange rates', [
                     'base_currency' => $baseCurrency,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
 
                 // استخدام الأسعار الافتراضية
@@ -1126,7 +1205,7 @@ class ExchangeRateService
                 'base_currency' => $baseCurrency,
                 'rates' => $rates,
                 'preloaded_at' => now()->toIso8601String(),
-                'provider' => $this->provider
+                'provider' => $this->provider,
             ];
         });
     }
@@ -1139,10 +1218,10 @@ class ExchangeRateService
         $response = Http::retry(3, 100)->get('https://openexchangerates.org/api/latest.json', [
             'app_id' => $this->apiKey,
             'base' => $baseCurrency,
-            'show_alternative' => false
+            'show_alternative' => false,
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new \Exception('OpenExchangeRates API failed');
         }
 
@@ -1170,17 +1249,17 @@ class ExchangeRateService
     {
         $response = Http::retry(3, 100)->get('http://data.fixer.io/api/latest', [
             'access_key' => $this->apiKey,
-            'base' => $baseCurrency
+            'base' => $baseCurrency,
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new \Exception('Fixer API failed');
         }
 
         $data = $response->json();
 
-        if (!$data['success']) {
-            throw new \Exception("Fixer API error: " . ($data['error']['info'] ?? 'Unknown error'));
+        if (! $data['success']) {
+            throw new \Exception('Fixer API error: '.($data['error']['info'] ?? 'Unknown error'));
         }
 
         $allRates = $data['rates'] ?? [];
@@ -1206,7 +1285,7 @@ class ExchangeRateService
     {
         $response = Http::retry(3, 100)->get("https://api.exchangerate-api.com/v4/latest/{$baseCurrency}");
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new \Exception('ExchangeRate-API failed');
         }
 
@@ -1234,17 +1313,17 @@ class ExchangeRateService
             'access_key' => $this->apiKey,
             'currencies' => $currenciesString,
             'source' => $baseCurrency,
-            'format' => 1
+            'format' => 1,
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new \Exception('Currency Layer API failed');
         }
 
         $data = $response->json();
 
-        if (!$data['success']) {
-            throw new \Exception("Currency Layer API error");
+        if (! $data['success']) {
+            throw new \Exception('Currency Layer API error');
         }
 
         $quotes = $data['quotes'] ?? [];
@@ -1283,7 +1362,7 @@ class ExchangeRateService
                 $rates[$currency] = 1.0;
                 Log::warning('No fallback rate available for pair', [
                     'from' => $baseCurrency,
-                    'to' => $currency
+                    'to' => $currency,
                 ]);
             }
         }
@@ -1299,7 +1378,7 @@ class ExchangeRateService
         try {
             $supportedCurrencies = $this->getSupportedCurrencies();
 
-            if (!isset($supportedCurrencies[$currency])) {
+            if (! isset($supportedCurrencies[$currency])) {
                 throw new \Exception("Currency not supported: {$currency}");
             }
 
@@ -1315,14 +1394,14 @@ class ExchangeRateService
 
             Log::info('Currency validated successfully', [
                 'currency' => $currency,
-                'test_rate_to_usd' => $testRate
+                'test_rate_to_usd' => $testRate,
             ]);
 
             return true;
         } catch (\Exception $e) {
             Log::error('Currency validation failed', [
                 'currency' => $currency,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             Cache::put("currency_valid_{$currency}", false, 3600); // ساعة واحدة
@@ -1338,12 +1417,12 @@ class ExchangeRateService
     {
         $status = [
             'provider' => $this->provider,
-            'api_key_configured' => !empty($this->apiKey),
+            'api_key_configured' => ! empty($this->apiKey),
             'live_mode' => $this->isLive,
             'cache_ttl' => $this->cacheTtl,
-            'fallback_rates_loaded' => !empty($this->fallbackRates),
+            'fallback_rates_loaded' => ! empty($this->fallbackRates),
             'supported_currencies_count' => count($this->getSupportedCurrencies()),
-            'last_validation' => null
+            'last_validation' => null,
         ];
 
         // إضافة آخر حالة تحقق
@@ -1355,7 +1434,7 @@ class ExchangeRateService
             $usageStats = $this->getUsageStatistics(7); // آخر 7 أيام
             $status['recent_usage'] = [
                 'total_conversions' => $usageStats['total_conversions'],
-                'daily_average' => $usageStats['daily_average_conversions']
+                'daily_average' => $usageStats['daily_average_conversions'],
             ];
         } catch (\Exception $e) {
             $status['recent_usage_error'] = $e->getMessage();
@@ -1365,7 +1444,7 @@ class ExchangeRateService
         $status['cache_status'] = [
             'enabled' => config('cache.default') !== 'null',
             'driver' => config('cache.default'),
-            'preload_enabled' => config('wallet.exchange_rate.preload_enabled', false)
+            'preload_enabled' => config('wallet.exchange_rate.preload_enabled', false),
         ];
 
         return $status;
@@ -1394,7 +1473,7 @@ class ExchangeRateService
             return true;
         } catch (\Exception $e) {
             Log::error('Failed to reset exchange rate service', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return false;
@@ -1412,7 +1491,7 @@ class ExchangeRateService
     ): array {
         $conversionResult = $this->convert($amount, $fromCurrency, $toCurrency);
 
-        if (!$conversionResult['success']) {
+        if (! $conversionResult['success']) {
             return $conversionResult;
         }
 
@@ -1427,8 +1506,8 @@ class ExchangeRateService
                 'converted_amount' => $conversionResult['converted_amount'],
                 'tax_amount' => round($taxAmount, 2),
                 'service_fee' => $conversionResult['net_amount'] - $conversionResult['converted_amount'],
-                'total' => round($totalAmount, 2)
-            ]
+                'total' => round($totalAmount, 2),
+            ],
         ]);
     }
 
@@ -1445,7 +1524,7 @@ class ExchangeRateService
                 self::PROVIDER_OPENEXCHANGERATES,
                 self::PROVIDER_FIXER,
                 self::PROVIDER_EXCHANGERATE_API,
-                self::PROVIDER_CURRENCY_LAYER
+                self::PROVIDER_CURRENCY_LAYER,
             ];
         }
 
@@ -1453,7 +1532,7 @@ class ExchangeRateService
             'from_currency' => $fromCurrency,
             'to_currency' => $toCurrency,
             'compared_at' => now()->toIso8601String(),
-            'providers' => []
+            'providers' => [],
         ];
 
         $originalProvider = $this->provider;
@@ -1472,14 +1551,14 @@ class ExchangeRateService
                 $comparison['providers'][$provider] = [
                     'rate' => $rate,
                     'status' => 'success',
-                    'has_api_key' => !empty($providerApiKey)
+                    'has_api_key' => ! empty($providerApiKey),
                 ];
             } catch (\Exception $e) {
                 $comparison['providers'][$provider] = [
                     'rate' => null,
                     'status' => 'error',
                     'error' => $e->getMessage(),
-                    'has_api_key' => !empty($providerApiKey)
+                    'has_api_key' => ! empty($providerApiKey),
                 ];
             }
         }
@@ -1493,7 +1572,7 @@ class ExchangeRateService
             return $provider['status'] === 'success' && $provider['rate'] > 0;
         });
 
-        if (!empty($validRates)) {
+        if (! empty($validRates)) {
             $bestProvider = array_keys($validRates)[0];
             $bestRate = $validRates[$bestProvider]['rate'];
 
@@ -1521,7 +1600,7 @@ class ExchangeRateService
 
         Log::info('Starting bulk conversion with memory management', [
             'total_conversions' => $totalConversions,
-            'batch_size' => $batchSize
+            'batch_size' => $batchSize,
         ]);
 
         // تقسيم إلى دفعات لتجنب استهلاك الذاكرة
@@ -1531,7 +1610,7 @@ class ExchangeRateService
             Log::debug('Processing batch', [
                 'batch_index' => $batchIndex + 1,
                 'batch_size' => count($batch),
-                'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . ' MB'
+                'memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2).' MB',
             ]);
 
             foreach ($batch as $conversion) {
@@ -1545,7 +1624,7 @@ class ExchangeRateService
                     $results[] = [
                         'success' => true,
                         'conversion_id' => $conversion['id'] ?? null,
-                        'data' => $result
+                        'data' => $result,
                     ];
                 } catch (\Exception $e) {
                     $results[] = [
@@ -1554,7 +1633,7 @@ class ExchangeRateService
                         'error' => $e->getMessage(),
                         'amount' => $conversion['amount'],
                         'from_currency' => $conversion['from_currency'],
-                        'to_currency' => $conversion['to_currency']
+                        'to_currency' => $conversion['to_currency'],
                     ];
                 }
             }
@@ -1565,19 +1644,19 @@ class ExchangeRateService
 
         Log::info('Bulk conversion completed', [
             'total_processed' => $totalConversions,
-            'successful' => count(array_filter($results, fn($r) => $r['success'])),
-            'failed' => count(array_filter($results, fn($r) => !$r['success'])),
-            'final_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2) . ' MB'
+            'successful' => count(array_filter($results, fn ($r) => $r['success'])),
+            'failed' => count(array_filter($results, fn ($r) => ! $r['success'])),
+            'final_memory_usage' => round(memory_get_usage(true) / 1024 / 1024, 2).' MB',
         ]);
 
         return [
             'total_conversions' => $totalConversions,
             'batches_processed' => count($batches),
-            'successful' => count(array_filter($results, fn($r) => $r['success'])),
-            'failed' => count(array_filter($results, fn($r) => !$r['success'])),
+            'successful' => count(array_filter($results, fn ($r) => $r['success'])),
+            'failed' => count(array_filter($results, fn ($r) => ! $r['success'])),
             'results' => $results,
             'processed_at' => now()->toIso8601String(),
-            'memory_usage' => round(memory_get_peak_usage(true) / 1024 / 1024, 2) . ' MB'
+            'memory_usage' => round(memory_get_peak_usage(true) / 1024 / 1024, 2).' MB',
         ];
     }
 }

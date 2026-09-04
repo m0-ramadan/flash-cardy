@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Language;
 use App\Traits\HasAiTranslation;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,10 +19,16 @@ class CategoryController extends Controller
      * قائمة اللغات المدعومة
      */
     protected $supportedLanguages;
+
     use HasAiTranslation;
+
     public function __construct()
     {
-        $this->supportedLanguages = Language::all();
+        try {
+            $this->supportedLanguages = Language::all();
+        } catch (\Throwable $e) {
+            $this->supportedLanguages = collect();
+        }
     }
 
     /**
@@ -71,7 +76,8 @@ class CategoryController extends Controller
 
             return view('Admin.category.index', compact('categories', 'parentCategories'));
         } catch (\Exception $e) {
-            Log::error('خطأ في عرض الأقسام: ' . $e->getMessage());
+            Log::error('خطأ في عرض الأقسام: '.$e->getMessage());
+
             return back()->with('error', 'حدث خطأ أثناء تحميل الأقسام');
         }
     }
@@ -122,12 +128,12 @@ class CategoryController extends Controller
         try {
             DB::beginTransaction();
 
-            $category = new Category();
+            $category = new Category;
 
             // ✅ تعيين الترجمات - باستخدام البيانات القادمة كمصفوفات
             if ($request->has('name') && is_array($request->name)) {
                 foreach ($request->name as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('name', $code, $value);
                     }
                 }
@@ -136,7 +142,7 @@ class CategoryController extends Controller
             // ✅ تعيين الوصف
             if ($request->has('description') && is_array($request->description)) {
                 foreach ($request->description as $code => $value) {
-                    if (!is_null($value) && $value !== '') {
+                    if (! is_null($value) && $value !== '') {
                         $category->setTranslation('description', $code, $value);
                     }
                 }
@@ -145,7 +151,7 @@ class CategoryController extends Controller
             // ✅ تعيين meta_title
             if ($request->has('meta_title') && is_array($request->meta_title)) {
                 foreach ($request->meta_title as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_title', $code, $value);
                     }
                 }
@@ -154,7 +160,7 @@ class CategoryController extends Controller
             // ✅ تعيين meta_description
             if ($request->has('meta_description') && is_array($request->meta_description)) {
                 foreach ($request->meta_description as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_description', $code, $value);
                     }
                 }
@@ -163,14 +169,14 @@ class CategoryController extends Controller
             // ✅ تعيين meta_keywords
             if ($request->has('meta_keywords') && is_array($request->meta_keywords)) {
                 foreach ($request->meta_keywords as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_keywords', $code, $value);
                     }
                 }
             }
 
             // التأكد من وجود الاسم العربي
-            if (!$category->getTranslation('name', 'ar')) {
+            if (! $category->getTranslation('name', 'ar')) {
                 throw new \Exception('الاسم العربي مطلوب');
             }
 
@@ -205,16 +211,16 @@ class CategoryController extends Controller
             // إذا كان المستخدم اختار "حفظ وإضافة جديد"
             if ($request->has('save_and_add_another')) {
                 return redirect()->route('admin.categories.create')
-                    ->with('success', $message . '، يمكنك إضافة قسم آخر');
+                    ->with('success', $message.'، يمكنك إضافة قسم آخر');
             }
 
             return redirect()->route('admin.categories.index')
                 ->with('success', $message);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('خطأ في إضافة القسم: ' . $e->getMessage());
+            Log::error('خطأ في إضافة القسم: '.$e->getMessage());
 
-            return back()->with('error', 'حدث خطأ أثناء إضافة القسم: ' . $e->getMessage())
+            return back()->with('error', 'حدث خطأ أثناء إضافة القسم: '.$e->getMessage())
                 ->withInput();
         }
     }
@@ -232,7 +238,7 @@ class CategoryController extends Controller
             },
             'products' => function ($query) {
                 $query->latest()->limit(10);
-            }
+            },
         ]);
 
         $category->loadCount(['products', 'children']);
@@ -274,7 +280,7 @@ class CategoryController extends Controller
             // ✅ تعيين الترجمات - باستخدام البيانات القادمة كمصفوفات
             if ($request->has('name') && is_array($request->name)) {
                 foreach ($request->name as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('name', $code, $value);
                     }
                 }
@@ -283,7 +289,7 @@ class CategoryController extends Controller
             // ✅ تعيين الوصف
             if ($request->has('description') && is_array($request->description)) {
                 foreach ($request->description as $code => $value) {
-                    if (!is_null($value) && $value !== '') {
+                    if (! is_null($value) && $value !== '') {
                         $category->setTranslation('description', $code, $value);
                     }
                 }
@@ -292,7 +298,7 @@ class CategoryController extends Controller
             // ✅ تعيين meta_title
             if ($request->has('meta_title') && is_array($request->meta_title)) {
                 foreach ($request->meta_title as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_title', $code, $value);
                     }
                 }
@@ -301,7 +307,7 @@ class CategoryController extends Controller
             // ✅ تعيين meta_description
             if ($request->has('meta_description') && is_array($request->meta_description)) {
                 foreach ($request->meta_description as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_description', $code, $value);
                     }
                 }
@@ -310,7 +316,7 @@ class CategoryController extends Controller
             // ✅ تعيين meta_keywords
             if ($request->has('meta_keywords') && is_array($request->meta_keywords)) {
                 foreach ($request->meta_keywords as $code => $value) {
-                    if (!empty($value)) {
+                    if (! empty($value)) {
                         $category->setTranslation('meta_keywords', $code, $value);
                     }
                 }
@@ -357,9 +363,9 @@ class CategoryController extends Controller
                 ->with('success', 'تم تحديث القسم بنجاح');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('خطأ في تحديث القسم: ' . $e->getMessage());
+            Log::error('خطأ في تحديث القسم: '.$e->getMessage());
 
-            return back()->with('error', 'حدث خطأ أثناء تحديث القسم: ' . $e->getMessage())
+            return back()->with('error', 'حدث خطأ أثناء تحديث القسم: '.$e->getMessage())
                 ->withInput();
         }
     }
@@ -384,7 +390,7 @@ class CategoryController extends Controller
             'parent_id' => 'nullable|exists:categories,id',
             'order' => 'nullable|integer|min:0',
             'status_id' => 'required|integer|in:1,2',
-            'slug' => 'nullable|string|max:255|unique:categories,slug,' . $categoryId,
+            'slug' => 'nullable|string|max:255|unique:categories,slug,'.$categoryId,
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
             'sub_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
             'delete_image' => 'nullable|boolean',
@@ -407,7 +413,7 @@ class CategoryController extends Controller
             if ($category->products()->exists()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لا يمكن حذف القسم لأنه يحتوي على منتجات.'
+                    'message' => 'لا يمكن حذف القسم لأنه يحتوي على منتجات.',
                 ], 400);
             }
 
@@ -415,7 +421,7 @@ class CategoryController extends Controller
             if ($category->children()->exists()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لا يمكن حذف القسم لأنه يحتوي على أقسام فرعية.'
+                    'message' => 'لا يمكن حذف القسم لأنه يحتوي على أقسام فرعية.',
                 ], 400);
             }
 
@@ -427,14 +433,14 @@ class CategoryController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم حذف القسم بنجاح.'
+                'message' => 'تم حذف القسم بنجاح.',
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في حذف القسم: ' . $e->getMessage());
+            Log::error('خطأ في حذف القسم: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء حذف القسم: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء حذف القسم: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -488,8 +494,8 @@ class CategoryController extends Controller
         }
 
         // إنشاء اسم فريد
-        $filename = Str::uuid() . '.webp';
-        $path = $directory . '/' . $filename;
+        $filename = Str::uuid().'.webp';
+        $path = $directory.'/'.$filename;
 
         // حفظ الصورة
         Storage::disk('public')->put($path, file_get_contents($file));
@@ -499,7 +505,7 @@ class CategoryController extends Controller
             $optimizer = OptimizerChainFactory::create();
             $optimizer->optimize(Storage::disk('public')->path($path));
         } catch (\Exception $e) {
-            Log::warning('فشل في تحسين الصورة: ' . $e->getMessage());
+            Log::warning('فشل في تحسين الصورة: '.$e->getMessage());
         }
 
         return $path;
@@ -513,6 +519,7 @@ class CategoryController extends Controller
         if ($path && Storage::disk('public')->exists($path)) {
             return Storage::disk('public')->delete($path);
         }
+
         return false;
     }
 
@@ -531,7 +538,7 @@ class CategoryController extends Controller
             })
             ->exists()
         ) {
-            $slug = $originalSlug . '-' . $count++;
+            $slug = $originalSlug.'-'.$count++;
         }
 
         return $slug;
@@ -544,7 +551,7 @@ class CategoryController extends Controller
     {
         $request->validate([
             'name' => 'required|string',
-            'category_id' => 'nullable|exists:categories,id'
+            'category_id' => 'nullable|exists:categories,id',
         ]);
 
         $slug = Str::slug($request->name);
@@ -552,7 +559,7 @@ class CategoryController extends Controller
 
         return response()->json([
             'success' => true,
-            'slug' => $slug
+            'slug' => $slug,
         ]);
     }
 
@@ -570,7 +577,7 @@ class CategoryController extends Controller
             'action' => 'required|string|in:enhance,complete,seo',
             'tone' => 'nullable|string',
             'style' => 'nullable|string',
-            'category_id' => 'nullable|exists:categories,id'
+            'category_id' => 'nullable|exists:categories,id',
         ]);
 
         try {
@@ -578,27 +585,27 @@ class CategoryController extends Controller
             $enhancedText = $request->text;
 
             if ($request->action == 'enhance') {
-                $enhancedText = '✨ ' . $request->text . ' (نص محسن)';
+                $enhancedText = '✨ '.$request->text.' (نص محسن)';
             } elseif ($request->action == 'complete') {
-                $enhancedText = $request->text . '... هذا النص تم إكماله تلقائياً ليكون أكثر شمولاً وفائدة للزوار.';
+                $enhancedText = $request->text.'... هذا النص تم إكماله تلقائياً ليكون أكثر شمولاً وفائدة للزوار.';
             } elseif ($request->action == 'seo') {
                 if ($request->type == 'meta_title') {
-                    $enhancedText = $request->text . ' - أفضل العروض والأسعار';
+                    $enhancedText = $request->text.' - أفضل العروض والأسعار';
                 } elseif ($request->type == 'meta_description') {
-                    $enhancedText = 'اكتشف ' . $request->text . ' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام. تسوق الآن!';
+                    $enhancedText = 'اكتشف '.$request->text.' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام. تسوق الآن!';
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'enhanced_text' => $enhancedText
+                'enhanced_text' => $enhancedText,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في تحسين النص: ' . $e->getMessage());
+            Log::error('خطأ في تحسين النص: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تحسين النص: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء تحسين النص: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -616,7 +623,7 @@ class CategoryController extends Controller
             'description' => 'nullable|string',
             'target_lang' => 'required|string|in:en,fr,de,es,it,tr,ur,fa', // أضف كل اللغات المدعومة
             'tone' => 'nullable|string',
-            'style' => 'nullable|string'
+            'style' => 'nullable|string',
         ]);
 
         try {
@@ -624,7 +631,7 @@ class CategoryController extends Controller
             $translatedName = $this->translateWithAI($request->name, $request->target_lang);
 
             $translatedDescription = null;
-            if ($request->description && !empty(trim($request->description))) {
+            if ($request->description && ! empty(trim($request->description))) {
                 $translatedDescription = $this->translateWithAI($request->description, $request->target_lang);
             }
 
@@ -632,18 +639,19 @@ class CategoryController extends Controller
                 'success' => true,
                 'translated' => [
                     'name' => $translatedName,
-                    'description' => $translatedDescription
-                ]
+                    'description' => $translatedDescription,
+                ],
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في الترجمة: ' . $e->getMessage());
+            Log::error('خطأ في الترجمة: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء الترجمة: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء الترجمة: '.$e->getMessage(),
             ], 500);
         }
     }
+
     private function getTranslation($text, $targetLang)
     {
         // للعرض فقط - استبدل هذا بـ API حقيقي
@@ -673,6 +681,7 @@ class CategoryController extends Controller
 
         return $translated;
     }
+
     /**
      * إنشاء SEO بالذكاء الاصطناعي.
      */
@@ -682,33 +691,33 @@ class CategoryController extends Controller
             'name' => 'required|string',
             'description' => 'nullable|string',
             'tone' => 'nullable|string',
-            'style' => 'nullable|string'
+            'style' => 'nullable|string',
         ]);
 
         try {
             // توليد SEO تلقائي
-            $metaTitle = $request->name . ' - أفضل الأسعار والجودة';
+            $metaTitle = $request->name.' - أفضل الأسعار والجودة';
 
             $metaDescription = $request->description
                 ? Str::limit($request->description, 150)
-                : 'اكتشف ' . $request->name . ' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام. تسوق الآن واستفد من العروض الحصرية!';
+                : 'اكتشف '.$request->name.' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام. تسوق الآن واستفد من العروض الحصرية!';
 
-            $metaKeywords = str_replace(' ', ', ', $request->name) . ', تسوق, عروض, تخفيضات';
+            $metaKeywords = str_replace(' ', ', ', $request->name).', تسوق, عروض, تخفيضات';
 
             return response()->json([
                 'success' => true,
                 'data' => [
                     'meta_title' => $metaTitle,
                     'meta_description' => $metaDescription,
-                    'meta_keywords' => $metaKeywords
-                ]
+                    'meta_keywords' => $metaKeywords,
+                ],
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في إنشاء SEO: ' . $e->getMessage());
+            Log::error('خطأ في إنشاء SEO: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء إنشاء SEO: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء إنشاء SEO: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -726,21 +735,21 @@ class CategoryController extends Controller
             'description' => 'nullable|string',
             'category_id' => 'required|exists:categories,id',
             'tone' => 'nullable|string',
-            'style' => 'nullable|string'
+            'style' => 'nullable|string',
         ]);
 
         try {
             // للاختبار، سنعيد نفس البيانات مع تحسين بسيط
-            $enhancedName = $request->name . ' (محسن)';
+            $enhancedName = $request->name.' (محسن)';
             $enhancedDescription = $request->description
-                ? $request->description . ' - هذا وصف محسن بالذكاء الاصطناعي لجعل المحتوى أكثر جاذبية وفعالية.'
-                : 'هذا وصف محسن بالذكاء الاصطناعي للقسم ' . $request->name;
+                ? $request->description.' - هذا وصف محسن بالذكاء الاصطناعي لجعل المحتوى أكثر جاذبية وفعالية.'
+                : 'هذا وصف محسن بالذكاء الاصطناعي للقسم '.$request->name;
 
             $enhancedSlug = Str::slug($request->name);
-            $metaTitle = $request->name . ' - أفضل الأسعار والجودة';
+            $metaTitle = $request->name.' - أفضل الأسعار والجودة';
             $metaDescription = $enhancedDescription
                 ? Str::limit($enhancedDescription, 150)
-                : 'اكتشف ' . $request->name . ' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام.';
+                : 'اكتشف '.$request->name.' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام.';
             $metaKeywords = str_replace(' ', ', ', $request->name);
 
             return response()->json([
@@ -751,15 +760,15 @@ class CategoryController extends Controller
                     'slug' => $enhancedSlug,
                     'meta_title' => $metaTitle,
                     'meta_description' => $metaDescription,
-                    'meta_keywords' => $metaKeywords
-                ]
+                    'meta_keywords' => $metaKeywords,
+                ],
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في تحسين القسم: ' . $e->getMessage());
+            Log::error('خطأ في تحسين القسم: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تحسين القسم: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء تحسين القسم: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -783,14 +792,14 @@ class CategoryController extends Controller
                 'message' => "تم {$statusText} القسم بنجاح",
                 'status_id' => $newStatus,
                 'status_text' => $newStatus == 1 ? 'نشط' : 'غير نشط',
-                'status_class' => $newStatus == 1 ? 'success' : 'danger'
+                'status_class' => $newStatus == 1 ? 'success' : 'danger',
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في تبديل حالة القسم: ' . $e->getMessage());
+            Log::error('خطأ في تبديل حالة القسم: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تغيير حالة القسم'
+                'message' => 'حدث خطأ أثناء تغيير حالة القسم',
             ], 500);
         }
     }
@@ -801,7 +810,7 @@ class CategoryController extends Controller
     public function duplicate(Request $request, Category $category)
     {
         $request->validate([
-            'name' => 'required|string|max:255'
+            'name' => 'required|string|max:255',
         ]);
 
         try {
@@ -827,7 +836,7 @@ class CategoryController extends Controller
                 if ($code != 'ar') {
                     $oldName = $category->getTranslation('name', $code);
                     if ($oldName) {
-                        $newCategory->setTranslation('name', $code, $oldName . ' (نسخة)');
+                        $newCategory->setTranslation('name', $code, $oldName.' (نسخة)');
                     }
                 }
             }
@@ -853,15 +862,15 @@ class CategoryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'تم نسخ القسم بنجاح',
-                'data' => $newCategory
+                'data' => $newCategory,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('خطأ في نسخ القسم: ' . $e->getMessage());
+            Log::error('خطأ في نسخ القسم: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء نسخ القسم: ' . $e->getMessage()
+                'message' => 'حدث خطأ أثناء نسخ القسم: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -871,13 +880,13 @@ class CategoryController extends Controller
      */
     private function duplicateImage($imagePath, $folder)
     {
-        if (!Storage::disk('public')->exists($imagePath)) {
+        if (! Storage::disk('public')->exists($imagePath)) {
             return null;
         }
 
         $extension = pathinfo($imagePath, PATHINFO_EXTENSION);
-        $newFileName = Str::uuid() . '.' . $extension;
-        $newPath = $folder . '/' . $newFileName;
+        $newFileName = Str::uuid().'.'.$extension;
+        $newPath = $folder.'/'.$newFileName;
 
         Storage::disk('public')->copy($imagePath, $newPath);
 
@@ -893,7 +902,7 @@ class CategoryController extends Controller
             'categories' => 'required|array',
             'categories.*.id' => 'required|exists:categories,id',
             'categories.*.order' => 'required|integer|min:0',
-            'categories.*.parent_id' => 'nullable|exists:categories,id'
+            'categories.*.parent_id' => 'nullable|exists:categories,id',
         ]);
 
         try {
@@ -903,7 +912,7 @@ class CategoryController extends Controller
                 Category::where('id', $item['id'])
                     ->update([
                         'order' => $item['order'],
-                        'parent_id' => $item['parent_id'] ?? null
+                        'parent_id' => $item['parent_id'] ?? null,
                     ]);
             }
 
@@ -911,15 +920,15 @@ class CategoryController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم تحديث ترتيب الأقسام بنجاح'
+                'message' => 'تم تحديث ترتيب الأقسام بنجاح',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('خطأ في تحديث ترتيب الأقسام: ' . $e->getMessage());
+            Log::error('خطأ في تحديث ترتيب الأقسام: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تحديث ترتيب الأقسام'
+                'message' => 'حدث خطأ أثناء تحديث ترتيب الأقسام',
             ], 500);
         }
     }
@@ -945,11 +954,11 @@ class CategoryController extends Controller
                 ->orderBy('order')
                 ->get();
 
-            $filename = 'categories_export_' . now()->format('Y-m-d_H-i-s') . '.csv';
+            $filename = 'categories_export_'.now()->format('Y-m-d_H-i-s').'.csv';
             $handle = fopen('php://temp', 'w+');
 
             // إضافة BOM للغة العربية
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             // العناوين
             fputcsv($handle, [
@@ -962,7 +971,7 @@ class CategoryController extends Controller
                 'الحالة',
                 'عدد المنتجات',
                 'عدد الأقسام الفرعية',
-                'تاريخ الإضافة'
+                'تاريخ الإضافة',
             ]);
 
             // البيانات
@@ -977,7 +986,7 @@ class CategoryController extends Controller
                     $category->status_id == 1 ? 'نشط' : 'غير نشط',
                     $category->products_count ?? 0,
                     $category->children_count ?? 0,
-                    $category->created_at->format('Y-m-d H:i:s')
+                    $category->created_at->format('Y-m-d H:i:s'),
                 ]);
             }
 
@@ -987,9 +996,9 @@ class CategoryController extends Controller
 
             return response($content)
                 ->header('Content-Type', 'text/csv; charset=utf-8')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
         } catch (\Exception $e) {
-            Log::error('خطأ في تصدير الأقسام: ' . $e->getMessage());
+            Log::error('خطأ في تصدير الأقسام: '.$e->getMessage());
 
             return back()->with('error', 'حدث خطأ أثناء تصدير الأقسام');
         }
@@ -1010,15 +1019,16 @@ class CategoryController extends Controller
 
             case 'complete':
                 // إكمال النص
-                return $text . '... هذا هو النص المكمل.';
+                return $text.'... هذا هو النص المكمل.';
 
             case 'seo':
                 // تحسين SEO
                 if ($type == 'meta_title') {
-                    return $text . ' - متجرنا';
+                    return $text.' - متجرنا';
                 } elseif ($type == 'meta_description') {
-                    return 'اكتشف ' . $text . ' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام.';
+                    return 'اكتشف '.$text.' في متجرنا. أفضل الأسعار والجودة العالية مع ضمان الرضا التام.';
                 }
+
                 return $text;
 
             default:
@@ -1033,7 +1043,7 @@ class CategoryController extends Controller
     {
         // هنا يمكنك دمج Google Translate API أو أي خدمة ترجمة أخرى
         // هذا مجرد مثال بسيط
-        return $text . ' [' . $targetLang . ']';
+        return $text.' ['.$targetLang.']';
     }
 
     /**
@@ -1043,7 +1053,7 @@ class CategoryController extends Controller
     {
         $request->validate([
             'category_ids' => 'required|array',
-            'category_ids.*' => 'exists:categories,id'
+            'category_ids.*' => 'exists:categories,id',
         ]);
 
         try {
@@ -1054,12 +1064,14 @@ class CategoryController extends Controller
                 $category = Category::find($categoryId);
 
                 if ($category->products()->exists()) {
-                    $skipped[] = $category->getTranslation('name', 'ar') . ' (يحتوي على منتجات)';
+                    $skipped[] = $category->getTranslation('name', 'ar').' (يحتوي على منتجات)';
+
                     continue;
                 }
 
                 if ($category->children()->exists()) {
-                    $skipped[] = $category->getTranslation('name', 'ar') . ' (يحتوي على أقسام فرعية)';
+                    $skipped[] = $category->getTranslation('name', 'ar').' (يحتوي على أقسام فرعية)';
+
                     continue;
                 }
 
@@ -1072,21 +1084,21 @@ class CategoryController extends Controller
 
             $message = "تم حذف {$deleted} أقسام بنجاح";
             if (count($skipped) > 0) {
-                $message .= "، وتخطي " . count($skipped) . " أقسام: " . implode('، ', $skipped);
+                $message .= '، وتخطي '.count($skipped).' أقسام: '.implode('، ', $skipped);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
                 'deleted' => $deleted,
-                'skipped' => $skipped
+                'skipped' => $skipped,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في الحذف المتعدد: ' . $e->getMessage());
+            Log::error('خطأ في الحذف المتعدد: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء حذف الأقسام'
+                'message' => 'حدث خطأ أثناء حذف الأقسام',
             ], 500);
         }
     }
@@ -1098,7 +1110,7 @@ class CategoryController extends Controller
     {
         $request->validate([
             'category_ids' => 'required|array',
-            'category_ids.*' => 'exists:categories,id'
+            'category_ids.*' => 'exists:categories,id',
         ]);
 
         try {
@@ -1108,14 +1120,14 @@ class CategoryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => "تم تفعيل {$count} أقسام بنجاح",
-                'count' => $count
+                'count' => $count,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في التفعيل المتعدد: ' . $e->getMessage());
+            Log::error('خطأ في التفعيل المتعدد: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تفعيل الأقسام'
+                'message' => 'حدث خطأ أثناء تفعيل الأقسام',
             ], 500);
         }
     }
@@ -1127,7 +1139,7 @@ class CategoryController extends Controller
     {
         $request->validate([
             'category_ids' => 'required|array',
-            'category_ids.*' => 'exists:categories,id'
+            'category_ids.*' => 'exists:categories,id',
         ]);
 
         try {
@@ -1137,14 +1149,14 @@ class CategoryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => "تم تعطيل {$count} أقسام بنجاح",
-                'count' => $count
+                'count' => $count,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في التعطيل المتعدد: ' . $e->getMessage());
+            Log::error('خطأ في التعطيل المتعدد: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تعطيل الأقسام'
+                'message' => 'حدث خطأ أثناء تعطيل الأقسام',
             ], 500);
         }
     }
@@ -1157,7 +1169,7 @@ class CategoryController extends Controller
         $request->validate([
             'category_ids' => 'required|array',
             'category_ids.*' => 'exists:categories,id',
-            'parent_id' => 'required|exists:categories,id'
+            'parent_id' => 'required|exists:categories,id',
         ]);
 
         try {
@@ -1165,7 +1177,7 @@ class CategoryController extends Controller
             if (in_array($request->parent_id, $request->category_ids)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'لا يمكن نقل القسم إلى نفسه'
+                    'message' => 'لا يمكن نقل القسم إلى نفسه',
                 ], 400);
             }
 
@@ -1178,14 +1190,14 @@ class CategoryController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => "تم نقل {$count} أقسام إلى {$parentCategory->getTranslation('name', 'ar')} بنجاح",
-                'count' => $count
+                'count' => $count,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في النقل المتعدد: ' . $e->getMessage());
+            Log::error('خطأ في النقل المتعدد: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'حدث خطأ أثناء نقل الأقسام'
+                'message' => 'حدث خطأ أثناء نقل الأقسام',
             ], 500);
         }
     }
@@ -1207,14 +1219,14 @@ class CategoryController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $categories
+                'data' => $categories,
             ]);
         } catch (\Exception $e) {
-            Log::error('خطأ في تحميل شجرة الأقسام: ' . $e->getMessage());
+            Log::error('خطأ في تحميل شجرة الأقسام: '.$e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'فشل في تحميل شجرة الأقسام'
+                'message' => 'فشل في تحميل شجرة الأقسام',
             ], 500);
         }
     }

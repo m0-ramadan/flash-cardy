@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Website\FavoriteController;
 use App\Http\Controllers\Api\Website\HomeController;
 use App\Http\Controllers\Api\Website\InfoIpController;
 use App\Http\Controllers\Api\Website\LanguageController;
+use App\Http\Controllers\Api\Website\NowPaymentsIpnController;
 use App\Http\Controllers\Api\Website\OrderController;
 use App\Http\Controllers\Api\Website\ProductController;
 use App\Http\Controllers\Api\Website\ReviewController;
@@ -134,6 +135,7 @@ Route::prefix('v1')->group(function () {
     Route::get('trace/{codeOrder}', [OrderController::class, 'traceOrder'])->name('trace');
 
     Route::post('/paymob/webhook', [OrderController::class, 'webhook'])->withoutMiddleware(['throttle:60,1']);
+    Route::post('/nowpayments/ipn', NowPaymentsIpnController::class)->name('nowpayments.ipn');
 
     // مقالات
     Route::prefix('articles')->group(function () {

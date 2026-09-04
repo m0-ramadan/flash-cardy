@@ -1,11 +1,12 @@
 <?php
+
 // app/Models/Order.php
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Order extends Model
 {
@@ -15,6 +16,8 @@ class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'cart_id',
+        'session_id',
         'order_number',
         'status',
         'subtotal',
@@ -30,6 +33,7 @@ class Order extends Model
         'shipped_at',
         'delivered_at',
         'status_payment',
+        'paid_at',
         'image',
         'provider', // internal, like4app
         'provider_order_id', // like4app order ID
@@ -40,6 +44,7 @@ class Order extends Model
     protected $casts = [
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'paid_at' => 'datetime',
         'total_amount' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
@@ -51,8 +56,9 @@ class Order extends Model
     public function getImageUrlAttribute()
     {
         if ($this->image) {
-            return asset('storage/' . $this->image);
+            return asset('storage/'.$this->image);
         }
+
         return null;
     }
 
@@ -69,6 +75,16 @@ class Order extends Model
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function paymentTransactions()
+    {
+        return $this->hasMany(PaymentTransaction::class);
+    }
+
+    public function latestPaymentTransaction()
+    {
+        return $this->hasOne(PaymentTransaction::class)->latestOfMany();
     }
 
     public function logs()
@@ -117,11 +133,11 @@ class Order extends Model
         parent::boot();
 
         static::creating(function ($order) {
-            if (!$order->order_number) {
+            if (! $order->order_number) {
                 $year = date('Y');
 
                 $lastOrder = static::withTrashed()
-                    ->where('order_number', 'like', 'ORD-' . $year . '-%')
+                    ->where('order_number', 'like', 'ORD-'.$year.'-%')
                     ->orderByDesc('id')
                     ->first();
 
@@ -133,7 +149,7 @@ class Order extends Model
 
                 $newNumber = $lastNumber + 1;
 
-                $order->order_number = 'ORD-' . $year . '-' . str_pad($newNumber, 6, '0', STR_PAD_LEFT);
+                $order->order_number = 'ORD-'.$year.'-'.str_pad($newNumber, 6, '0', STR_PAD_LEFT);
             }
         });
     }

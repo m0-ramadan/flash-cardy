@@ -15,28 +15,58 @@ class PaymentMethod extends Model
         'key',
         'icon',
         'is_active',
-        'is_payment','is_wallet'
+        'is_payment',
+        'is_wallet',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_payment' => 'boolean',
+        'is_wallet' => 'boolean',
     ];
 
     protected $appends = [
-        'icon_url'
+        'icon_url',
+        'icon_type',
     ];
 
-    /**
-     * Get the URL for the icon
-     */
-    public function getIconUrlAttribute()
+    public function hasFontAwesomeIcon(): bool
     {
-        if ($this->icon) {
-            return Storage::disk('public')->url('payment-methods/' . $this->icon);
+        if (! $this->icon) {
+            return false;
         }
 
-        return asset('images/default-payment.png');
+        return preg_match(
+            '/^(fas|far|fab|fal|fad|fa-solid|fa-regular|fa-brands)\s+fa-[a-z0-9-]+$/i',
+            trim($this->icon)
+        ) === 1;
+    }
+
+    public function hasImageIcon(): bool
+    {
+        return filled($this->icon) && ! $this->hasFontAwesomeIcon();
+    }
+
+    public function getIconTypeAttribute(): ?string
+    {
+        if (! $this->icon) {
+            return null;
+        }
+
+        return $this->hasFontAwesomeIcon() ? 'fontawesome' : 'image';
+    }
+
+    public function getIconUrlAttribute()
+    {
+        if (! $this->hasImageIcon()) {
+            return null;
+        }
+
+        if (filter_var($this->icon, FILTER_VALIDATE_URL)) {
+            return $this->icon;
+        }
+
+        return Storage::disk('public')->url('payment-methods/'.$this->icon);
     }
 
     /**
@@ -73,7 +103,7 @@ class PaymentMethod extends Model
         $originalKey = $key;
 
         while (self::where('key', $key)->exists()) {
-            $key = $originalKey . '-' . $counter;
+            $key = $originalKey.'-'.$counter;
             $counter++;
         }
 

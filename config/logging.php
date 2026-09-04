@@ -65,6 +65,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'payment' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/payment.log'),
+            'level' => env('PAYMENT_LOG_LEVEL', env('LOG_LEVEL', 'info')),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

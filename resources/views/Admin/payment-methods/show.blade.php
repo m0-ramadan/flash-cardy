@@ -290,8 +290,10 @@
 
                         <div class="text-center" bis_skin_checked="1">
                             <div class="detail-icon" bis_skin_checked="1">
-                                @if ($paymentMethod->icon)
+                                @if ($paymentMethod->hasFontAwesomeIcon())
                                     <i class="{{ $paymentMethod->icon }}"></i>
+                                @elseif ($paymentMethod->hasImageIcon())
+                                    <img src="{{ $paymentMethod->icon_url }}" alt="{{ $paymentMethod->name }}" style="max-width:60px;max-height:60px;">
                                 @else
                                     <i class="fas fa-credit-card"></i>
                                 @endif
@@ -337,7 +339,11 @@
                                                     <div class="icon-preview"
                                                         style="width: 40px; height: 40px; font-size: 20px;"
                                                         bis_skin_checked="1">
-                                                        <i class="{{ $paymentMethod->icon }}"></i>
+                                                        @if ($paymentMethod->hasFontAwesomeIcon())
+                                                            <i class="{{ $paymentMethod->icon }}"></i>
+                                                        @else
+                                                            <img src="{{ $paymentMethod->icon_url }}" alt="{{ $paymentMethod->name }}" style="max-width:32px;max-height:32px;">
+                                                        @endif
                                                     </div>
                                                     <code>{{ $paymentMethod->icon }}</code>
                                                 </div>
