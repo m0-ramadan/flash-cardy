@@ -77,16 +77,16 @@
 
                                 <!-- الأكواد الرقمية وبطاقات الشحن التابعة لهذا العنصر -->
                                 <tr>
-                                    <td colspan="4" class="bg-light p-3 border-bottom">
+                                    <td colspan="4" class="p-3 border-bottom">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <h6 class="mb-0 text-primary"><i class="ti ti-barcode me-1"></i> أكواد التسليم الرقمي (Serials / Vouchers)</h6>
                                             <span class="badge bg-label-info">حالة التسليم: {{ $item->serial_status ?: 'pending' }}</span>
                                         </div>
 
                                         @if(!empty($item->serial_codes) && is_array($item->serial_codes) && count($item->serial_codes) > 0)
-                                            <div class="table-responsive bg-white rounded border mb-2">
+                                            <div class="table-responsive rounded border mb-2">
                                                 <table class="table table-sm table-bordered align-middle mb-0">
-                                                    <thead class="table-light">
+                                                    <thead>
                                                         <tr>
                                                             <th>#</th>
                                                             <th>كود البطاقة (Voucher Code)</th>
@@ -99,7 +99,7 @@
                                                             <tr>
                                                                 <td style="width: 40px;">{{ $idx + 1 }}</td>
                                                                 <td>
-                                                                    <code class="fw-bold fs-6 text-dark select-all">{{ $serial['voucher_code'] ?? ($serial['serial_code'] ?? '—') }}</code>
+                                                                    <code class="fw-bold fs-6 select-all">{{ $serial['voucher_code'] ?? ($serial['serial_code'] ?? '—') }}</code>
                                                                 </td>
                                                                 <td>
                                                                     @if(!empty($serial['pin_plain']))
@@ -126,7 +126,7 @@
 
                                         <!-- خيارات تعيين وإرسال الأكواد يدوياً -->
                                         @if($item->serial_status !== 'delivered' && ($item->product?->fulfillment_source === 'local_serials' || !empty($item->product?->serials)))
-                                            <div class="card p-3 border border-primary border-opacity-25 mt-2 bg-white">
+                                            <div class="card p-3 border border-primary border-opacity-25 mt-2">
                                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                                     <span class="small fw-bold">إدارة تسليم الأكواد لهذا المنتج:</span>
                                                     <small class="text-muted">المخزون المتاح حالياً من الأكواد: <strong class="text-success">{{ $item->product?->serials()->usable()->count() ?? 0 }}</strong></small>

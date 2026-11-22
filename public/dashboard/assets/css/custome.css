@@ -1,3 +1,110 @@
 .prefix_title{
     opacity: .3;
 }
+
+/* ==========================================================================
+   Comprehensive Dark Mode Support for Sneat Dashboard
+   ========================================================================== */
+.dark-style,
+.dark-style body,
+.dark-style .layout-page,
+.dark-style .content-wrapper,
+.dark-style .container-xxl,
+.dark-style .container-fluid {
+    background-color: #25293c !important;
+    color: #b6bee3 !important;
+}
+
+.dark-style .card,
+.dark-style .bg-white,
+.dark-style div[style*="background: white"],
+.dark-style div[style*="background: #fff"],
+.dark-style div[style*="background-color: white"],
+.dark-style div[style*="background-color: #fff"] {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+    border-color: #434968 !important;
+}
+
+.dark-style .card-header,
+.dark-style .card-footer {
+    background-color: #2f3349 !important;
+    border-color: #434968 !important;
+    color: #b6bee3 !important;
+}
+
+.dark-style .table,
+.dark-style .table-responsive,
+.dark-style .table-responsive.bg-white {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+}
+
+.dark-style .table th,
+.dark-style .table td {
+    border-color: #434968 !important;
+    color: #b6bee3 !important;
+}
+
+.dark-style .text-dark {
+    color: #cfd3ec !important;
+}
+
+.dark-style .text-muted {
+    color: #7983bb !important;
+}
+
+.dark-style .form-control,
+.dark-style .form-select,
+.dark-style .input-group-text {
+    background-color: #2f3349 !important;
+    border-color: #434968 !important;
+    color: #cfd3ec !important;
+}
+
+.dark-style .form-control:focus,
+.dark-style .form-select:focus {
+    background-color: #2f3349 !important;
+    border-color: #7367f0 !important;
+    color: #cfd3ec !important;
+}
+
+.dark-style .border,
+.dark-style .border-top,
+.dark-style .border-bottom,
+.dark-style .border-start,
+.dark-style .border-end {
+    border-color: #434968 !important;
+}
+
+.dark-style .bg-light,
+.dark-style .bg-label-secondary {
+    background-color: #353952 !important;
+    color: #b6bee3 !important;
+}
+
+.dark-style .modal-content {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+    border-color: #434968 !important;
+}
+
+.dark-style .modal-header,
+.dark-style .modal-footer {
+    border-color: #434968 !important;
+}
+
+.dark-style .dropdown-menu {
+    background-color: #2f3349 !important;
+    border-color: #434968 !important;
+}
+
+.dark-style .dropdown-item {
+    color: #b6bee3 !important;
+}
+
+.dark-style .dropdown-item:hover,
+.dark-style .dropdown-item:focus {
+    background-color: #353952 !important;
+    color: #fff !important;
+}

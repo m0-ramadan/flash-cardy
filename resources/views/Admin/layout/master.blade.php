@@ -9,6 +9,20 @@
         content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    <script>
+        (function() {
+            var templateName = 'vertical-menu-template-no-customizer';
+            var style = localStorage.getItem('templateCustomizer-' + templateName + '--Style') || 'dark';
+            if (style === 'dark' || (style === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.remove('light-style');
+                document.documentElement.classList.add('dark-style');
+            } else if (style === 'light') {
+                document.documentElement.classList.remove('dark-style');
+                document.documentElement.classList.add('light-style');
+            }
+        })();
+    </script>
+
     <!-- تنسيق خاص لمعالجة الأخطاء -->
     <style>
         /* تنسيق للصور الفاشلة */
