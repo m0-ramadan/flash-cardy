@@ -238,7 +238,7 @@
         </div>
 
         @if ($orders->hasPages())
-            <div class="card-footer border-top d-flex justify-content-between align-items-center">
+            <div class="card-footer border-top d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
                 <small class="text-muted">عرض {{ $orders->firstItem() }} إلى {{ $orders->lastItem() }} من أصل {{ $orders->total() }} طلب</small>
                 <div>{{ $orders->links() }}</div>
             </div>
