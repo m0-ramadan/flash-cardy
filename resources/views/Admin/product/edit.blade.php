@@ -122,9 +122,15 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="sku">رمز المنتج (SKU)</label>
-                                <input type="text" class="form-control @error('sku') is-invalid @enderror" id="sku" name="sku" value="{{ old('sku', $product->sku) }}">
+                                <div class="input-group">
+                                    <input type="text" class="form-control @error('sku') is-invalid @enderror" id="sku" name="sku" value="{{ old('sku', $product->sku) }}" placeholder="مثال: SKU-123456">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="generateSku()" title="توليد رمز تلقائي">
+                                        <i class="ti ti-refresh me-1"></i> توليد
+                                    </button>
+                                </div>
+                                <small class="text-muted">رمز المنتج المميز في المتجر والمخزون.</small>
                                 @error('sku')
-                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
                         </div>
@@ -247,6 +253,15 @@ function toggleDiscountFields(checkbox) {
         fields.style.display = '';
     } else {
         fields.style.display = 'none';
+    }
+}
+
+function generateSku() {
+    const rand = Math.floor(100000 + Math.random() * 900000);
+    const skuInput = document.getElementById('sku');
+    if (skuInput) {
+        skuInput.value = `SKU-${rand}`;
+        skuInput.classList.remove('is-invalid');
     }
 }
 </script>

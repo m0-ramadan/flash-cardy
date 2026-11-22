@@ -334,6 +334,12 @@ class Product extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Product $product) {
+            if (empty($product->sku)) {
+                $product->sku = static::generateUniqueSku();
+            }
+        });
+
         static::saving(function (Product $product) {
             if (!empty($product->external_id)) {
                 $product->inventory_type = 'digital';
@@ -344,5 +350,17 @@ class Product extends Model
                 if ($product->track_stock === null) $product->track_stock = true;
             }
         });
+    }
+
+    /**
+     * توليد رمز منتج (SKU) فريد وتلقائي
+     */
+    public static function generateUniqueSku(string $prefix = 'SKU'): string
+    {
+        do {
+            $sku = strtoupper($prefix . '-' . random_int(100000, 999999));
+        } while (static::withTrashed()->where('sku', $sku)->exists());
+
+        return $sku;
     }
 }

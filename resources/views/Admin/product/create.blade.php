@@ -106,9 +106,15 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="sku">رمز المنتج (SKU)</label>
-                                <input type="text" class="form-control @error('sku') is-invalid @enderror" id="sku" name="sku" value="{{ old('sku') }}" placeholder="اختياري (مثال: PSN-SA-50)">
+                                <div class="input-group">
+                                    <input type="text" class="form-control @error('sku') is-invalid @enderror" id="sku" name="sku" value="{{ old('sku', $autoSku ?? '') }}" placeholder="مثال: SKU-123456">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="generateSku()" title="توليد رمز جديد">
+                                        <i class="ti ti-refresh me-1"></i> توليد
+                                    </button>
+                                </div>
+                                <small class="text-muted">يتم التوليد تلقائياً أو يمكنك إدخال رمز مخصص.</small>
                                 @error('sku')
-                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
                         </div>
@@ -235,5 +241,21 @@ function toggleDiscountFields(checkbox) {
         fields.style.display = 'none';
     }
 }
+
+function generateSku() {
+    const rand = Math.floor(100000 + Math.random() * 900000);
+    const skuInput = document.getElementById('sku');
+    if (skuInput) {
+        skuInput.value = `SKU-${rand}`;
+        skuInput.classList.remove('is-invalid');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const skuInput = document.getElementById('sku');
+    if (skuInput && !skuInput.value.trim()) {
+        generateSku();
+    }
+});
 </script>
 @endsection

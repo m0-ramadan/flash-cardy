@@ -189,11 +189,13 @@ class ProductController extends Controller
         $categories = Category::where('status_id', 1)->get();
         $offers = Offer::all();
         $languages = Language::where('is_active', true)->get();
+        $autoSku = Product::generateUniqueSku();
 
         return view('Admin.product.create', compact(
             'categories',
             'offers',
-            'languages'
+            'languages',
+            'autoSku'
         ));
     }
 
@@ -352,7 +354,7 @@ class ProductController extends Controller
             $product->has_discount = $request->boolean('has_discount');
             $product->includes_tax = $request->boolean('includes_tax');
             $product->includes_shipping = $request->boolean('includes_shipping');
-            $product->sku = $request->sku;
+            $product->sku = filled($request->sku) ? trim((string)$request->sku) : Product::generateUniqueSku();
             $this->applyOperationalFields($product, $request);
             if ($request->filled('sign_currency')) {
                 $product->sign_currency = $request->sign_currency;
@@ -812,7 +814,7 @@ class ProductController extends Controller
                 'has_discount' => $request->boolean('has_discount'),
                 'includes_tax' => $request->boolean('includes_tax'),
                 'includes_shipping' => $request->boolean('includes_shipping'),
-                'sku' => $request->sku,
+                'sku' => filled($request->sku) ? trim((string)$request->sku) : ($product->sku ?: Product::generateUniqueSku()),
                 'sign_currency' => $request->input('sign_currency', $product->sign_currency ?? 'EGP'),
             ]);
 
