@@ -74,16 +74,16 @@
             <div class="col-md-4 mb-3">
                 <label class="form-label">نوع المخزون</label>
                 <select class="form-select" name="inventory_type" id="inventory_type">
-                    @foreach(['physical'=>'فعلي','digital'=>'رقمي','service'=>'خدمة'] as $value=>$label)
-                        <option value="{{ $value }}" @selected(old('inventory_type', $editingProduct?->inventory_type ?? 'physical') === $value)>{{ $label }}</option>
+                    @foreach(['digital'=>'رقمي','service'=>'خدمة'] as $value=>$label)
+                        <option value="{{ $value }}" @selected(old('inventory_type', $editingProduct?->inventory_type ?? 'digital') === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
             <div class="col-md-8 mb-3 d-flex flex-wrap gap-4 align-items-end pb-2">
                 <div class="form-check form-switch">
                     <input type="hidden" name="track_stock" value="0">
-                    <input class="form-check-input" type="checkbox" name="track_stock" value="1" id="track_stock" @checked(old('track_stock', $editingProduct?->track_stock ?? true))>
-                    <label class="form-check-label" for="track_stock">تتبع مخزون فعلي</label>
+                    <input class="form-check-input" type="checkbox" name="track_stock" value="1" id="track_stock" @checked(old('track_stock', $editingProduct?->track_stock ?? false))>
+                    <label class="form-check-label" for="track_stock">تتبع المخزون</label>
                 </div>
                 <div class="form-check form-switch">
                     <input type="hidden" name="allow_serial_backorder" value="0">

@@ -1311,7 +1311,7 @@ class ProductController extends Controller
             'is_featured' => $request->boolean('is_featured'),
             'is_best_seller' => $request->boolean('is_best_seller'),
             'type' => $request->input('type', $digital ? 'digital_code' : ($product->type ?: 'product')),
-            'inventory_type' => $digital ? 'digital' : $request->input('inventory_type', $product->inventory_type ?: 'physical'),
+            'inventory_type' => $digital ? 'digital' : $request->input('inventory_type', $product->inventory_type ?: 'digital'),
             'track_stock' => $digital ? false : $request->boolean('track_stock', true),
             'max_quantity' => (int) $request->input('max_quantity', $product->max_quantity ?: 0),
             'instructions' => $request->input('instructions'),

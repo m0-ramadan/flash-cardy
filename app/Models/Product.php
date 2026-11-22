@@ -346,8 +346,8 @@ class Product extends Model
                 $product->track_stock = false;
                 $product->reserved_stock = 0;
             } elseif (empty($product->inventory_type)) {
-                $product->inventory_type = 'physical';
-                if ($product->track_stock === null) $product->track_stock = true;
+                $product->inventory_type = 'digital';
+                if ($product->track_stock === null) $product->track_stock = false;
             }
         });
     }
