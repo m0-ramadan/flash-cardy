@@ -9,13 +9,21 @@ class LanguageMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
-        // تحقق إذا كانت اللغة تأتي من الهيدر
+        $supportedLocales = ['ar', 'en'];
+
         if ($request->hasHeader('Accept-Language')) {
-            $locale = $request->header('Accept-Language');
-            app()->setLocale($locale);
+            $raw = (string) $request->header('Accept-Language');
+            $locale = strtolower(substr(trim(strtok($raw, ',;-_')), 0, 2));
+            if (in_array($locale, $supportedLocales, true)) {
+                app()->setLocale($locale);
+            } else {
+                app()->setLocale(config('app.locale', 'ar'));
+            }
         } elseif (session()->has('locale')) {
-            // أو من الجلسة
-            app()->setLocale(session('locale'));
+            $sLocale = (string) session('locale');
+            if (in_array($sLocale, $supportedLocales, true)) {
+                app()->setLocale($sLocale);
+            }
         }
         
         return $next($request);

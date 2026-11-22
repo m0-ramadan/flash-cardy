@@ -100,7 +100,7 @@ class SettingController extends Controller
 
         $ipLocale = $country !== null ? ($countryLocales[$country]['lang'] ?? null) : null;
 
-        $defaultLang = strtolower((string) setting('site_language', 'en'));
+        $defaultLang = strtolower((string) \setting('site_language', 'en'));
         $finalLang =
             (in_array($requestedLang, $supported, true) ? $requestedLang : null)
             ?? $preferredFromHeader

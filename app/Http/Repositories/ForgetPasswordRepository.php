@@ -33,7 +33,8 @@ class ForgetPasswordRepository implements ForgetPasswordInterface{
         }
         $token = Str::random(10);
 
-        DB::table('password_resets')->insert([
+        DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+        DB::table('password_reset_tokens')->insert([
             'email' => $user->email,
             'token' => $token,
             'created_at' => now()->addHours(6)
@@ -56,7 +57,7 @@ class ForgetPasswordRepository implements ForgetPasswordInterface{
     public function resetPassword($request){
 
         $token = $request->token;
-        $passwordRest = DB::table('password_resets')->where('token', $token)->first();
+        $passwordRest = DB::table('password_reset_tokens')->where('token', $token)->first();
 
         // Verify
         if(!$passwordRest){
@@ -80,7 +81,7 @@ class ForgetPasswordRepository implements ForgetPasswordInterface{
         $user->password = Hash::make($request->password);
         $user->save();
 
-        DB::table('password_resets')->where('token', $token)->delete();
+        DB::table('password_reset_tokens')->where('token', $token)->delete();
 
         return  redirect()->route('front.login')->with('success','تم تغيير كلمة المرور بنجاح');
     }

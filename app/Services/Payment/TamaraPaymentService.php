@@ -349,7 +349,7 @@ class TamaraPaymentService implements PaymentServiceInterface
             $this->config['webhook_secret']
         );
 
-        return hash_equals($computedSignature, $payload['signature']);
+        return isset($payload['signature']) && is_string($payload['signature']) && hash_equals($computedSignature, $payload['signature']);
     }
 
     /**

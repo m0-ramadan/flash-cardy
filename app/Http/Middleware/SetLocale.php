@@ -27,19 +27,15 @@ class SetLocale
      */
     private function sanitizeLocale($locale): string
     {
-        // قائمة اللغات المدعومة
-        $supportedLocales = ['ar', 'en', 'fr', 'es']; // أضف لغات أخرى حسب الحاجة
+        $supportedLocales = ['ar', 'en', 'fr', 'es'];
         
-        // تقسيم اللغة إذا كانت تحتوي على إقليم (مثل en-US)
-        $locale = explode('-', $locale)[0];
-        $locale = explode('_', $locale)[0];
+        $first = strtok((string)$locale, ',;');
+        $clean = strtolower(substr(trim(strtok($first, '-_')), 0, 2));
         
-        // التحقق إذا كانت اللغة مدعومة
-        if (in_array($locale, $supportedLocales)) {
-            return $locale;
+        if (in_array($clean, $supportedLocales, true)) {
+            return $clean;
         }
         
-        // العودة للغة الافتراضية
         return config('app.fallback_locale', 'ar');
     }
 }

@@ -106,7 +106,7 @@ class LogVisitor
                     ];
                 }
             } catch (\Throwable $e) {
-                Log::debug("Torann GeoIP failed for IP {$ip}: " . $e->getMessage());
+                // GeoIP service not configured, seamlessly proceed to API fallbacks
             }
         }
 

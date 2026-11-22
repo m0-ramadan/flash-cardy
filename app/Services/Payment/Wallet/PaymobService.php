@@ -314,7 +314,7 @@ class PaymobService implements PaymentGatewayInterface
         // حساب HMAC
         $calculatedHmac = hash_hmac('sha512', $concatenated, $this->hmacSecret);
 
-        return hash_equals($hmac, $calculatedHmac);
+        return is_string($hmac) && hash_equals($hmac, $calculatedHmac);
     }
 
     /**

@@ -256,7 +256,7 @@ public function verifyTransaction(array $data): array
 
         $calculatedHmac = hash_hmac('sha512', $concatenated, $this->hmacSecret);
 
-        return hash_equals($hmac, $calculatedHmac);
+        return is_string($hmac) && hash_equals($hmac, $calculatedHmac);
     }
 
     public function refund(string $transactionId, float $amount, string $reason = ''): array

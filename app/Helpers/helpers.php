@@ -289,3 +289,48 @@ if (!function_exists('getFileType')) {
         return 'other';
     }
 }
+
+if (!function_exists('setting')) {
+    /**
+     * Get / set the specified setting value.
+     *
+     * @param array|string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    function setting($key = null, $default = null)
+    {
+        static $settingsCache = null;
+
+        if ($key === null) {
+            return new class {
+                public function save() {
+                    return true;
+                }
+            };
+        }
+
+        if (is_array($key)) {
+            foreach ($key as $k => $v) {
+                if (is_array($v) || is_object($v)) {
+                    $v = json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
+                \App\Models\Setting::updateOrCreate(['key' => $k], ['value' => (string)$v]);
+                if ($settingsCache !== null) {
+                    $settingsCache[$k] = (string)$v;
+                }
+            }
+            return true;
+        }
+
+        if ($settingsCache === null) {
+            try {
+                $settingsCache = \App\Models\Setting::pluck('value', 'key')->toArray();
+            } catch (\Throwable $e) {
+                $settingsCache = [];
+            }
+        }
+
+        return $settingsCache[$key] ?? $default;
+    }
+}
