@@ -56,20 +56,15 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label" for="banner_type_id">نوع البانر <span class="text-danger">*</span></label>
-                            <select class="form-select" id="banner_type_id" name="banner_type_id" required>
+                            <label class="form-label" for="banner_type_id">مكان ظهور البانر <span class="text-danger">*</span></label>
+                            <select class="form-select" id="banner_type_id" name="banner_type_id" required onchange="toggleCategorySelect(this.value)">
                                 @foreach ($bannerTypes as $type)
                                     @php
-                                        $nameAr = match($type->name) {
-                                            'main_slider' => 'سلايدر رئيسي (الواجهة الرئيسية)',
-                                            'image_card' => 'بطاقة إعلانية / بانر ثابت',
-                                            'category_slider' => 'سلايدر أقسام',
-                                            'product_slider' => 'سلايدر منتجات',
-                                            default => $type->name
-                                        };
+                                        $isMain = ($type->name === 'main_slider');
+                                        $label = $isMain ? 'سلايدر رئيسي (الواجهة الرئيسية)' : 'بانر قسم محدد (صفحة القسم)';
                                     @endphp
                                     <option value="{{ $type->id }}" @selected(old('banner_type_id', $banner->banner_type_id) == $type->id)>
-                                        {{ $nameAr }}
+                                        {{ $label }}
                                     </option>
                                 @endforeach
                             </select>
@@ -90,16 +85,17 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label" for="category_id">ربط بقسم محدد (اختياري)</label>
+                        <div class="mb-3" id="edit_category_wrapper" style="{{ $banner->banner_type_id == 3 ? '' : 'display: none;' }}">
+                            <label class="form-label" for="category_id">القسم المستهدف</label>
                             <select class="form-select" id="category_id" name="category_id">
-                                <option value="">عام (الصفحة الرئيسية)</option>
+                                <option value="">-- اختر القسم --</option>
                                 @foreach ($categories as $cat)
                                     <option value="{{ $cat->id }}" @selected(old('category_id', $banner->category_id) == $cat->id)>
                                         {{ is_array($cat->name) ? ($cat->name['ar'] ?? reset($cat->name)) : $cat->name }}
                                     </option>
                                 @endforeach
                             </select>
+                            <small class="text-muted">سيظهر هذا البانر في أعلى صفحة هذا القسم.</small>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">
@@ -228,6 +224,17 @@
 
 @section('js')
 <script>
+function toggleCategorySelect(typeId) {
+    const wrapper = document.getElementById('edit_category_wrapper');
+    const categorySelect = document.getElementById('category_id');
+    if (typeId == 3) {
+        wrapper.style.display = 'block';
+    } else {
+        wrapper.style.display = 'none';
+        if (categorySelect) categorySelect.value = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // إضافة عنصر بانر جديد via AJAX
     const addItemForm = document.getElementById('addItemForm');

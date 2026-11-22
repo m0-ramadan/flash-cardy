@@ -55,11 +55,9 @@
                     @forelse ($banners as $banner)
                         @php
                             $typeName = match($banner->type?->name ?? '') {
-                                'main_slider' => 'سلايدر رئيسي (الصفحة الرئيسية)',
-                                'image_card' => 'بطاقة إعلانية',
-                                'category_slider' => 'سلايدر أقسام',
-                                'product_slider' => 'سلايدر منتجات',
-                                default => $banner->type?->name ?? 'افتراضي'
+                                'main_slider' => 'سلايدر الرئيسية',
+                                'category_slider' => 'بانر قسم',
+                                default => 'بانر'
                             };
                             $itemsCount = $banner->items?->count() ?? 0;
                         @endphp

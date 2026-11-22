@@ -36,59 +36,92 @@
         <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-header border-bottom">
-                    <h5 class="card-title mb-0">المعلومات الأساسية للبانر</h5>
+                    <h5 class="card-title mb-0">بيانات البانر</h5>
                 </div>
                 <div class="card-body pt-3">
-                    <form action="{{ route('admin.banners.store') }}" method="POST">
+                    <form action="{{ route('admin.banners.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
 
+                        <!-- نوع البانر -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">مكان ظهور البانر <span class="text-danger">*</span></label>
+                            <div class="row g-2">
+                                @foreach ($bannerTypes as $type)
+                                    @php
+                                        $isMain = ($type->name === 'main_slider');
+                                        $label = $isMain ? 'سلايدر الرئيسية' : 'بانر قسم محدد';
+                                        $desc = $isMain ? 'يظهر في السلايدر المتحرك بأعلى الصفحة الرئيسية' : 'يظهر في أعلى صفحة القسم المحدد بالمتجر';
+                                        $icon = $isMain ? 'ti-slideshow' : 'ti-category';
+                                    @endphp
+                                    <div class="col-md-6">
+                                        <div class="form-check custom-option custom-option-basic border rounded p-3 h-100">
+                                            <input class="form-check-input" type="radio" name="banner_type_id" id="type_{{ $type->id }}" value="{{ $type->id }}" @checked(old('banner_type_id', 1) == $type->id) onchange="toggleCategorySelect({{ $type->id }})">
+                                            <label class="form-check-label w-100" for="type_{{ $type->id }}">
+                                                <span class="d-flex align-items-center mb-1">
+                                                    <i class="ti {{ $icon }} me-2 text-primary fs-4"></i>
+                                                    <strong class="text-dark">{{ $label }}</strong>
+                                                </span>
+                                                <small class="text-muted d-block">{{ $desc }}</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <!-- اختيار القسم (يظهر فقط إذا كان البانر لقسم محدد) -->
+                        <div class="mb-3" id="category_select_wrapper" style="display: none;">
+                            <label class="form-label" for="category_id">القسم المستهدف <span class="text-danger">*</span></label>
+                            <select class="form-select @error('category_id') is-invalid @enderror" id="category_id" name="category_id">
+                                <option value="">-- اختر القسم الذي سيظهر به البانر --</option>
+                                @foreach ($categories as $cat)
+                                    <option value="{{ $cat->id }}" @selected(old('category_id') == $cat->id)>
+                                        {{ is_array($cat->name) ? ($cat->name['ar'] ?? reset($cat->name)) : $cat->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted">سيظهر هذا البانر للمستخدمين عند تصفح هذا القسم في الموقع.</small>
+                            @error('category_id')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <!-- عنوان البانر -->
                         <div class="mb-3">
                             <label class="form-label" for="title">عنوان البانر <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title') }}" required placeholder="مثال: سلايدر العروض الترويجية الرئيسية">
+                            <input type="text" class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title') }}" required placeholder="مثال: عروض نهاية الأسبوع / بطاقات بلايستيشن">
                             @error('title')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <!-- صورة البانر مع معاينة فورية -->
+                        <div class="mb-3">
+                            <label class="form-label" for="image">صورة البانر <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control @error('image') is-invalid @enderror" id="image" name="image" accept="image/*" onchange="previewBannerImage(this)">
+                            <small class="text-muted">يفضل مقاس عرضي مناسب (مثل 1200×400 لسلايدر الرئيسية، أو 800×300 لبانر القسم).</small>
+                            @error('image')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <div class="mt-2 text-center" id="image_preview_box" style="display: none;">
+                                <img id="preview_img" src="#" alt="معاينة الصورة" class="img-fluid rounded border shadow-sm" style="max-height: 200px; width: 100%; object-fit: cover;">
+                            </div>
+                        </div>
+
+                        <!-- رابط التوجيه (اختياري) -->
+                        <div class="mb-3">
+                            <label class="form-label" for="link_url">رابط التحويل عند النقر (اختياري)</label>
+                            <input type="text" class="form-control @error('link_url') is-invalid @enderror" id="link_url" name="link_url" value="{{ old('link_url') }}" placeholder="مثال: https://... أو /products/...">
+                            <small class="text-muted">عند نقر العميل على البانر، سيتم توجيهه إلى هذا الرابط.</small>
+                            @error('link_url')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label" for="banner_type_id">نوع البانر <span class="text-danger">*</span></label>
-                                <select class="form-select @error('banner_type_id') is-invalid @enderror" id="banner_type_id" name="banner_type_id" required>
-                                    @foreach ($bannerTypes as $type)
-                                        @php
-                                            $nameAr = match($type->name) {
-                                                'main_slider' => 'سلايدر رئيسي (واجهة المتجر الرئيسية)',
-                                                'image_card' => 'بطاقة إعلانية / بانر ثابت',
-                                                'category_slider' => 'سلايدر أقسام',
-                                                'product_slider' => 'سلايدر منتجات',
-                                                default => $type->name
-                                            };
-                                        @endphp
-                                        <option value="{{ $type->id }}" @selected(old('banner_type_id', 1) == $type->id)>
-                                            {{ $nameAr }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">اختر "سلايدر رئيسي" ليظهر في أعلى الصفحة الرئيسية بالمتجر</div>
-                            </div>
-
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="section_order">ترتيب البانر <span class="text-danger">*</span></label>
+                                <label class="form-label" for="section_order">ترتيب الظهور <span class="text-danger">*</span></label>
                                 <input type="number" min="1" class="form-control" id="section_order" name="section_order" value="{{ old('section_order', 1) }}" required>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label" for="category_id">ربط بقسم محدد (اختياري)</label>
-                                <select class="form-select" id="category_id" name="category_id">
-                                    <option value="">عام (الصفحة الرئيسية)</option>
-                                    @foreach ($categories as $cat)
-                                        <option value="{{ $cat->id }}" @selected(old('category_id') == $cat->id)>
-                                            {{ is_array($cat->name) ? ($cat->name['ar'] ?? reset($cat->name)) : $cat->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
                             </div>
 
                             <div class="col-md-6 mb-3 d-flex align-items-center pt-3">
@@ -100,14 +133,10 @@
                             </div>
                         </div>
 
-                        <div class="alert alert-info py-2 mt-2">
-                            <i class="ti ti-info-circle me-1"></i> بعد حفظ البانر، ستنتقل مباشرة لشاشة إضافة الصور والروابط والعناصر التابعة له.
-                        </div>
-
-                        <div class="d-flex justify-content-end gap-2 mt-4">
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-2 border-top">
                             <a href="{{ route('admin.banners.index') }}" class="btn btn-outline-secondary">إلغاء</a>
                             <button type="submit" class="btn btn-primary">
-                                <i class="ti ti-arrow-left me-1"></i> متابعة وإضافة الصور
+                                <i class="ti ti-check me-1"></i> حفظ ونشر البانر
                             </button>
                         </div>
                     </form>
@@ -116,4 +145,38 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('js')
+<script>
+function toggleCategorySelect(typeId) {
+    const wrapper = document.getElementById('category_select_wrapper');
+    const categorySelect = document.getElementById('category_id');
+    // typeId 3 = category_slider
+    if (typeId == 3) {
+        wrapper.style.display = 'block';
+    } else {
+        wrapper.style.display = 'none';
+        if (categorySelect) categorySelect.value = '';
+    }
+}
+
+function previewBannerImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview_img').src = e.target.result;
+            document.getElementById('image_preview_box').style.display = 'block';
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const checkedRadio = document.querySelector('input[name="banner_type_id"]:checked');
+    if (checkedRadio) {
+        toggleCategorySelect(checkedRadio.value);
+    }
+});
+</script>
 @endsection

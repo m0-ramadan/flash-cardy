@@ -177,12 +177,7 @@
                    <div>تواصل معنا</div>
                </a>
            </li>
-           <li class="menu-item ">
-               <a href="{{ route('admin.ads.index') }}" class="menu-link">
-                   <i class="menu-icon ti ti-gift"></i>
-                   <div>الإعانات</div>
-               </a>
-           </li>
+
 
            {{-- <li class="menu-item ">
                <a href="#/admin/order-reports" class="menu-link">

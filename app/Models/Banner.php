@@ -40,4 +40,15 @@ class Banner extends Model
     {
         return $this->hasOne(BannerGridLayout::class);
     }
+
+    public function getCategoryAttribute()
+    {
+        $catId = $this->category_id;
+        return $catId ? Category::find($catId) : null;
+    }
+
+    public function getCategoryIdAttribute()
+    {
+        return $this->items()->whereNotNull('category_id')->value('category_id');
+    }
 }

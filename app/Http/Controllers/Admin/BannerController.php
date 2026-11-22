@@ -68,15 +68,32 @@ class BannerController extends Controller
         try {
             $validatedData = $this->validateBannerRequest($request);
             
-            $banner = Banner::create($validatedData);
+            $banner = Banner::create([
+                'title' => $validatedData['title'],
+                'banner_type_id' => $validatedData['banner_type_id'],
+                'section_order' => $validatedData['section_order'],
+                'is_active' => $validatedData['is_active'],
+            ]);
             
             $this->handleBannerSettings($banner, $request);
+
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('banners', 'public');
+                $banner->items()->create([
+                    'item_order' => 1,
+                    'image_url' => $imagePath,
+                    'link_url' => $request->input('link_url'),
+                    'category_id' => $request->input('category_id'),
+                    'is_active' => true,
+                    'is_link_active' => !empty($request->input('link_url')),
+                ]);
+            }
             
             DB::commit();
 
             return redirect()
-                ->route('admin.banners.edit', $banner)
-                ->with('success', 'تم إنشاء البانر بنجاح. يمكنك الآن إضافة العناصر.');
+                ->route('admin.banners.index')
+                ->with('success', 'تم إنشاء البانر بنجاح.');
                 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
@@ -137,9 +154,33 @@ class BannerController extends Controller
         try {
             $validatedData = $this->validateBannerRequest($request);
             
-            $banner->update($validatedData);
+            $banner->update([
+                'title' => $validatedData['title'],
+                'banner_type_id' => $validatedData['banner_type_id'],
+                'section_order' => $validatedData['section_order'],
+                'is_active' => $validatedData['is_active'],
+            ]);
             
             $this->handleBannerSettings($banner, $request);
+
+            if ($request->filled('category_id')) {
+                $banner->items()->update(['category_id' => $request->input('category_id')]);
+            } elseif ($request->input('banner_type_id') == 1) { // سلايدر رئيسي
+                $banner->items()->update(['category_id' => null]);
+            }
+
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('banners', 'public');
+                $maxOrder = $banner->items()->max('item_order') ?? 0;
+                $banner->items()->create([
+                    'item_order' => $maxOrder + 1,
+                    'image_url' => $imagePath,
+                    'link_url' => $request->input('link_url'),
+                    'category_id' => $request->input('category_id'),
+                    'is_active' => true,
+                    'is_link_active' => !empty($request->input('link_url')),
+                ]);
+            }
             
             DB::commit();
 
@@ -248,10 +289,8 @@ class BannerController extends Controller
     private function prepareCreateData()
     {
         return [
-            'bannerTypes' => BannerType::all(),
-            'categories' => Category::where('status_id',1)->get(),
-            'products' => Product::where('status_id',1)->limit(100)->get(),
-            'promoCodes' => PromoCode::activeAndValid()->get(),
+            'bannerTypes' => BannerType::whereIn('name', ['main_slider', 'category_slider'])->get(),
+            'categories' => Category::where('status_id', 1)->get(),
         ];
     }
 
@@ -264,10 +303,8 @@ class BannerController extends Controller
     private function prepareEditData(Banner $banner)
     {
         return [
-            'bannerTypes' => BannerType::all(),
-            'categories' => Category::where('status_id',1)->get(),
-            'products' => Product::where('status_id',1)->limit(100)->get(),
-            'promoCodes' => PromoCode::activeAndValid()->get(),
+            'bannerTypes' => BannerType::whereIn('name', ['main_slider', 'category_slider'])->get(),
+            'categories' => Category::where('status_id', 1)->get(),
         ];
     }
 
@@ -284,9 +321,9 @@ class BannerController extends Controller
             'banner_type_id' => 'required|exists:banner_types,id',
             'section_order' => 'required|integer|min:1',
             'is_active' => 'required|boolean',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
             'category_id' => 'nullable|exists:categories,id',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+            'link_url' => 'nullable|string|max:500',
         ]);
     }
 
