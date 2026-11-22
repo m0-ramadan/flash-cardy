@@ -38,7 +38,7 @@ class StaticPageController extends Controller
         $sortDirection = $request->get('sort_direction', 'desc');
         $query->orderBy($sortBy, $sortDirection);
 
-        $pages = $query->paginate(10);
+        $pages = $query->paginate(20)->withQueryString();
 
         return view('Admin.static-pages.index', compact('pages'));
     }

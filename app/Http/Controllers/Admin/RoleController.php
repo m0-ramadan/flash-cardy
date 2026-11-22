@@ -22,7 +22,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بعرض الرتب');
         }
 
-        $query = Role::withCount(['users', 'permissions']);
+        $query = Role::where('guard_name', 'admin')->withCount(['users', 'permissions']);
 
         // البحث
         if ($request->filled('search')) {
@@ -38,11 +38,11 @@ class RoleController extends Controller
 
         // إحصائيات
         $stats = [
-            'total' => Role::count(),
-            'super_admins' => Role::where('name', 'super_admin')->count(),
-            'admins' => Role::where('name', 'admin')->count(),
-            'editors' => Role::where('name', 'editor')->count(),
-            'viewers' => Role::where('name', 'viewer')->count(),
+            'total' => Role::where('guard_name', 'admin')->count(),
+            'super_admins' => Role::where('guard_name', 'admin')->where('name', 'super_admin')->count(),
+            'admins' => Role::where('guard_name', 'admin')->where('name', 'admin')->count(),
+            'editors' => Role::where('guard_name', 'admin')->where('name', 'editor')->count(),
+            'viewers' => Role::where('guard_name', 'admin')->where('name', 'viewer')->count(),
         ];
 
         return view('Admin.roles.index', compact('roles', 'stats'));
@@ -57,8 +57,8 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بإنشاء رتب');
         }
 
-        $permissions = Permission::orderBy('module')->orderBy('name')->get();
-        $modules = Permission::distinct()->pluck('module')->filter()->values();
+        $permissions = Permission::where('guard_name', 'admin')->orderBy('module')->orderBy('name')->get();
+        $modules = Permission::where('guard_name', 'admin')->distinct()->pluck('module')->filter()->values();
 
         return view('Admin.roles.create', compact('permissions', 'modules'));
     }
@@ -77,13 +77,13 @@ class RoleController extends Controller
                 'required',
                 'string',
                 'max:255',
-                'unique:roles,name',
+                \Illuminate\Validation\Rule::unique('roles', 'name')->where('guard_name', 'admin'),
                 'regex:/^[a-z_]+$/'
             ],
             'display_name' => 'required|string|max:255',
             'description' => 'nullable|string|max:500',
             'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => [\Illuminate\Validation\Rule::exists('permissions', 'id')->where('guard_name', 'admin')]
         ], [
             'name.regex' => 'اسم الرتبة يجب أن يحتوي على أحرف صغيرة وشرطات سفلية فقط',
             'name.unique' => 'هذا الاسم مستخدم بالفعل لرتبة أخرى'
@@ -103,11 +103,12 @@ class RoleController extends Controller
                 'name' => $request->name,
                 'display_name' => $request->display_name,
                 'description' => $request->description,
+                'guard_name' => 'admin',
             ]);
 
             // ربط الصلاحيات
             if ($request->has('permissions')) {
-                $permissions = Permission::whereIn('id', $request->permissions)->pluck('name')->toArray();
+                $permissions = Permission::where('guard_name', 'admin')->whereIn('id', $request->permissions)->pluck('name')->toArray();
                 $role->syncPermissions($permissions);
             }
 
@@ -132,7 +133,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بعرض الرتب');
         }
 
-        $role = Role::with(['permissions', 'users' => function ($query) {
+        $role = Role::where('guard_name', 'admin')->with(['permissions', 'users' => function ($query) {
             $query->orderBy('created_at', 'desc')->limit(10);
         }])->findOrFail($id);
 
@@ -150,7 +151,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بتعديل الرتب');
         }
 
-        $role = Role::findOrFail($id);
+        $role = Role::where('guard_name', 'admin')->findOrFail($id);
 
         // منع تعديل الرتب المحمية
         if ($this->isProtectedRole($role)) {
@@ -158,8 +159,8 @@ class RoleController extends Controller
                 ->with('error', 'لا يمكن تعديل هذه الرتبة لأنها محمية');
         }
 
-        $permissions = Permission::orderBy('module')->orderBy('name')->get();
-        $modules = Permission::distinct()->pluck('module')->filter()->values();
+        $permissions = Permission::where('guard_name', 'admin')->orderBy('module')->orderBy('name')->get();
+        $modules = Permission::where('guard_name', 'admin')->distinct()->pluck('module')->filter()->values();
         $selectedPermissions = $role->permissions->pluck('id')->toArray();
 
         return view('Admin.roles.edit', compact('role', 'permissions', 'modules', 'selectedPermissions'));
@@ -174,7 +175,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بتعديل الرتب');
         }
 
-        $role = Role::findOrFail($id);
+        $role = Role::where('guard_name', 'admin')->findOrFail($id);
 
         // منع تعديل الرتب المحمية
         if ($this->isProtectedRole($role)) {
@@ -186,7 +187,7 @@ class RoleController extends Controller
             'display_name' => 'required|string|max:255',
             'description' => 'nullable|string|max:500',
             'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => [\Illuminate\Validation\Rule::exists('permissions', 'id')->where('guard_name', 'admin')]
         ]);
 
         if ($validator->fails()) {
@@ -206,7 +207,7 @@ class RoleController extends Controller
 
             // تحديث الصلاحيات
             if ($request->has('permissions')) {
-                $permissions = Permission::whereIn('id', $request->permissions)->pluck('name')->toArray();
+                $permissions = Permission::where('guard_name', 'admin')->whereIn('id', $request->permissions)->pluck('name')->toArray();
                 $role->syncPermissions($permissions);
             } else {
                 $role->syncPermissions([]);
@@ -229,11 +230,11 @@ class RoleController extends Controller
      */
     public function destroy($id)
     {
-        if (!auth()->guard('admin')->user()->can('delete_roles')) {
+        if (!auth()->guard('admin')->user()->can('roles.delete')) {
             abort(403, 'غير مصرح لك بحذف الرتب');
         }
 
-        $role = Role::findOrFail($id);
+        $role = Role::where('guard_name', 'admin')->findOrFail($id);
 
         // منع حذف الرتب المحمية
         if ($this->isProtectedRole($role)) {
@@ -275,7 +276,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بتعديل صلاحيات الرتب');
         }
 
-        $role = Role::findOrFail($id);
+        $role = Role::where('guard_name', 'admin')->findOrFail($id);
 
         // منع تعديل الرتب المحمية
         if ($this->isProtectedRole($role)) {
@@ -283,8 +284,8 @@ class RoleController extends Controller
                 ->with('error', 'لا يمكن تعديل صلاحيات هذه الرتبة لأنها محمية');
         }
 
-        $permissions = Permission::orderBy('module')->orderBy('name')->get();
-        $modules = Permission::distinct()->pluck('module')->filter()->values();
+        $permissions = Permission::where('guard_name', 'admin')->orderBy('module')->orderBy('name')->get();
+        $modules = Permission::where('guard_name', 'admin')->distinct()->pluck('module')->filter()->values();
         $selectedPermissions = $role->permissions->pluck('id')->toArray();
 
         return view('Admin.roles.permissions', compact('role', 'permissions', 'modules', 'selectedPermissions'));
@@ -299,7 +300,7 @@ class RoleController extends Controller
             abort(403, 'غير مصرح لك بتعديل صلاحيات الرتب');
         }
 
-        $role = Role::findOrFail($id);
+        $role = Role::where('guard_name', 'admin')->findOrFail($id);
 
         // منع تعديل الرتب المحمية
         if ($this->isProtectedRole($role)) {
@@ -309,7 +310,7 @@ class RoleController extends Controller
 
         $validator = Validator::make($request->all(), [
             'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id'
+            'permissions.*' => [\Illuminate\Validation\Rule::exists('permissions', 'id')->where('guard_name', 'admin')]
         ]);
 
         if ($validator->fails()) {
@@ -320,7 +321,7 @@ class RoleController extends Controller
 
         try {
             if ($request->has('permissions')) {
-                $permissions = Permission::whereIn('id', $request->permissions)->pluck('name')->toArray();
+                $permissions = Permission::where('guard_name', 'admin')->whereIn('id', $request->permissions)->pluck('name')->toArray();
                 $role->syncPermissions($permissions);
             } else {
                 $role->syncPermissions([]);

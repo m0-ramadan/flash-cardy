@@ -9,13 +9,20 @@ use Illuminate\Support\Facades\Storage;
 
 class LanguageController extends Controller
 {
+    public function create()
+    {
+        // The language manager creates languages in the index modal; keep this route valid
+        // for old bookmarks/buttons without introducing a second form implementation.
+        return redirect()->route('admin.languages.index')->with('open_create_language', true);
+    }
+
     public function index()
     {
         $languages = Language::orderBy('sort_order')->get();
         $activeLanguagesCount = Language::active()->count();
         $inactiveLanguagesCount = Language::where('is_active', false)->count();
         $defaultLanguage = Language::where('is_default', true)->first(); // تصحيح هنا
-        
+
         return view('Admin.languages.index', compact(
             'languages',
             'activeLanguagesCount',
@@ -98,7 +105,7 @@ class LanguageController extends Controller
                 $oldPath = str_replace('storage/', '', $language->image_path);
                 Storage::disk('public')->delete($oldPath);
             }
-            
+
             $path = $request->file('image')->store('languages/flags', 'public');
             $language->image_path = 'storage/' . $path;
         }
@@ -111,11 +118,11 @@ class LanguageController extends Controller
 
     public function destroy(Language $language)
     {
-        // لا يمكن حذف اللغة الافتراضية
-        if ($language->is_default) {
+        // لا يمكن حذف اللغة العربية أو اللغة الافتراضية
+        if ($language->code === 'ar' || $language->is_default) {
             return response()->json([
                 'success' => false,
-                'message' => 'لا يمكن حذف اللغة الافتراضية'
+                'message' => 'لا يمكن حذف اللغة العربية أو اللغة الافتراضية'
             ], 422);
         }
 
@@ -135,11 +142,11 @@ class LanguageController extends Controller
 
     public function toggle(Language $language)
     {
-        // لا يمكن تعطيل اللغة الافتراضية
-        if ($language->is_default && $language->is_active) {
+        // لا يمكن تعطيل اللغة العربية أو اللغة الافتراضية
+        if (($language->code === 'ar' || $language->is_default) && $language->is_active) {
             return response()->json([
                 'success' => false,
-                'message' => 'لا يمكن تعطيل اللغة الافتراضية'
+                'message' => 'لا يمكن تعطيل اللغة العربية أو اللغة الافتراضية'
             ], 422);
         }
 
@@ -178,7 +185,7 @@ class LanguageController extends Controller
     public function toggleAll(Request $request)
     {
         $action = $request->input('action');
-        
+
         if ($action === 'activate') {
             Language::where('is_active', false)->update(['is_active' => true]);
             $message = 'تم تفعيل جميع اللغات';

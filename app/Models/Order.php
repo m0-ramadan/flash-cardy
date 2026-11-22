@@ -39,6 +39,7 @@ class Order extends Model
         'provider_order_id', // like4app order ID
         'provider_response', // full response from provider
         'serial_codes', // JSON array of serial codes
+        'shipping_amount','coupon_id','address_id','shipping_address','shipping_address_snapshot','billing_address_snapshot','payment_method_id','currency','order_state','payment_state','fulfillment_status','refund_status','refunded_amount','inventory_released_at','inventory_committed_at','fulfilled_at',
     ];
 
     protected $casts = [
@@ -51,6 +52,7 @@ class Order extends Model
         'tax_amount' => 'decimal:2',
         'provider_response' => 'array',
         'serial_codes' => 'array',
+        'shipping_address_snapshot'=>'array','billing_address_snapshot'=>'array','refunded_amount'=>'decimal:4','inventory_released_at'=>'datetime','inventory_committed_at'=>'datetime','fulfilled_at'=>'datetime',
     ];
 
     public function getImageUrlAttribute()
@@ -153,4 +155,7 @@ class Order extends Model
             }
         });
     }
+
+    public function refunds(){ return $this->hasMany(Refund::class); }
+    public function stockReservations(){ return $this->hasMany(StockReservation::class); }
 }

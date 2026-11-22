@@ -14,6 +14,31 @@ return [
     |
     */
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
+    'firebase' => [
+        'web_api_key' => env('FIREBASE_WEB_API_KEY'),
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+    ],
+
+    'fcm' => [
+        'server_key' => env('FCM_SERVER_KEY'),
+    ],
+
+    'facebook' => [
+        'app_id' => env('FACEBOOK_APP_ID'),
+        'app_secret' => env('FACEBOOK_APP_SECRET'),
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v23.0'),
+    ],
+
+    'apple' => [
+        'client_id' => env('APPLE_CLIENT_ID'),
+        'client_secret' => env('APPLE_CLIENT_SECRET'),
+        'redirect_uri' => env('APPLE_REDIRECT_URI'),
+    ],
+
     'mailgun' => [
         'domain' => env('MAILGUN_DOMAIN'),
         'secret' => env('MAILGUN_SECRET'),
@@ -90,6 +115,9 @@ return [
         'lang_id' => env('LIKE4APP_LANG_ID', '1'),
         'secret_key' => env('LIKE4APP_SECRET_KEY'),
         'secret_iv' => env('LIKE4APP_SECRET_IV'),
+        'phone' => env('LIKE4APP_PHONE'),
+        'hash_key' => env('LIKE4APP_HASH_KEY'),
+        'base_url' => env('LIKE4APP_BASE_URL', 'https://taxes.like4app.com/online'),
     ],
     'deepseek' => [
         'api_key' => env('DEEPSEEK_API_KEY'),

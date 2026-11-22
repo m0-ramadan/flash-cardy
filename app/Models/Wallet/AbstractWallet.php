@@ -122,7 +122,7 @@ abstract class AbstractWallet extends Model
     /**
      * Abstract methods to be implemented by child classes
      */
-    abstract protected function getWalletType(): string;
+    abstract public function getWalletType(): string;
     abstract protected function getCreditTypes(): array;
     abstract protected function getDebitTypes(): array;
 }

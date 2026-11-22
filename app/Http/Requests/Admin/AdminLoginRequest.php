@@ -6,26 +6,18 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AdminLoginRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     *
-     * @return bool
-     */
-    public function authorize()
-    {
-        return true;
-    }
-
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array
-     */
-    public function rules()
+    public function authorize(): bool { return true; }
+    public function rules(): array
     {
         return [
-          'email'=>'required|email|exists:admins,email',
-           'password'=>'required'
+            'email' => ['required', 'email:rfc', 'max:255'],
+            'password' => ['required', 'string'],
+            'remember' => ['nullable', 'boolean'],
         ];
+    }
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('email')) $this->merge(['email' => mb_strtolower(trim((string) $this->email))]);
+        $this->merge(['remember' => $this->boolean('remember')]);
     }
 }

@@ -21,6 +21,9 @@ class User extends Authenticatable
         'apple_id',
         'phone',
         'image',
+        'is_active',
+        'deactivated_at',
+        'last_login_at',
     ];
 
     protected $hidden = [
@@ -31,7 +34,15 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_active' => 'boolean',
+        'deactivated_at' => 'datetime',
+        'last_login_at' => 'datetime',
     ];
+
+    public function socialIdentities()
+    {
+        return $this->hasMany(SocialIdentity::class);
+    }
 
     public function reviews()
     {

@@ -33,6 +33,8 @@ class UpdateUserAddressRequest extends FormRequest
             'type'             => 'nullable|string|max:255',
             'latitude'         => 'nullable|numeric',
             'longitude'        => 'nullable|numeric',
+            'is_default'       => 'sometimes|boolean',
+            'address_role'     => 'sometimes|in:shipping,billing,both',
         ];
     }
 

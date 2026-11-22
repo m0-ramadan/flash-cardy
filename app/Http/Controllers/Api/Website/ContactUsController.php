@@ -64,13 +64,14 @@ class ContactUsController extends Controller
         }
 
         $reply = $contact->replies()->create([
-            'user_id'     => $user->id,
-            'message'     => $request->message,
+            'user_id' => $user->id,
+            'sender_id' => $user->id,
+            'message' => trim(strip_tags($request->message)),
             'sender_type' => 'user',
         ]);
 
         // ✅ (اختياري) لو عندك status خليه in_progress أول ما اليوزر يرد
-        if ($contact->isFillable('status') && ($contact->status ?? null) === 'pending') {
+        if (in_array($contact->status, ['pending','open','replied'], true)) {
             $contact->update(['status' => 'in_progress']);
         }
 

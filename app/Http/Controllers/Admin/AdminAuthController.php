@@ -2,141 +2,116 @@
 
 namespace App\Http\Controllers\Admin;
 
-use Carbon\Carbon;
-use App\Models\Admin;
-use Illuminate\Support\Str;
-use Illuminate\Http\Request;
-use App\Mail\Website\OtpMail;
-use App\Models\OtpVerification;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Auth\Events\PasswordReset;
 use App\Http\Requests\Admin\AdminLoginRequest;
 use App\Http\Requests\Admin\Auth\SendOtpRequest;
+use App\Mail\AdminPasswordResetMail;
+use App\Models\Admin;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class AdminAuthController extends Controller
 {
-  public function __construct()
-  {
-    // $this->middleware(function ($request, $next) {
-
-    //   if (!auth('admin')->check()) {
-    //     return redirect()->route('admin.login.page');
-    //   }
-
-    //   return $next($request);
-    // });
-  }
-
-  // public function register()
-  // {
-  //   return $this->adminAuthInterface->register();
-  // }
-
-  public function loginPage()
-  {
-    if (auth('admin')->check()) {
-      return redirect('/');
-    }
-    return view('Admin.auth.login');
-  }
-
-  public function login(AdminLoginRequest $request)
-  {
-    $credentials = $request->only('email', 'password');
-
-    if (Auth::guard('admin')->attempt($credentials)) {
-      $request->session()->regenerate();
-      return redirect()->intended('/');
+    public function loginPage()
+    {
+        return auth('admin')->check() ? redirect('/') : view('Admin.auth.login');
     }
 
-    return back()->withErrors(['email' => 'يرجى إدخال بريد إلكتروني أو كلمة مرور صحيحة']);
-  }
+    public function login(AdminLoginRequest $request)
+    {
+        $admin = Admin::whereRaw('LOWER(email) = ?', [$request->validated('email')])->first();
+        if (!$admin || $admin->is_active === false || !Hash::check($request->validated('password'), $admin->password)) {
+            return back()->withInput($request->only('email'))->withErrors(['email' => 'بيانات الدخول غير صحيحة']);
+        }
 
-  public function logout(Request $request)
-  {
-    Auth::logout();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-    return redirect()->route('admin.login.page');
-  }
+        Auth::guard('admin')->login($admin, (bool) $request->validated('remember'));
+        $request->session()->regenerate();
+        $request->session()->put('admin_last_activity', time());
+        $admin->forceFill(['last_login_at' => now()])->saveQuietly();
 
-  public function showForgotPasswordForm()
-  {
-    return view('Admin.auth.forgot-password');
-  }
-
-  public function showResetPasswordForm($token, Request $request)
-  {
-    return view('Admin.auth.reset-password', ['token' => $token, 'email' => $request->email]);
-  }
-
-
-
-
-  public function sendResetOtp(SendOtpRequest $request)
-  {
-    try {
-
-      $email = $request->email;
-
-
-      OtpVerification::where('email', $email)->delete();
-
-      $otp = (string) random_int(100000, 999999);
-
-      OtpVerification::create([
-        'email'      => $email,
-        'otp'        => Hash::make($otp),
-        'expires_at' => Carbon::now()->addMinutes(5),
-      ]);
-
-      Mail::to($email)->send(new OtpMail($otp));
-
-      return back()->with('status', 'تم إرسال رمز التحقق (OTP) إلى بريدك الإلكتروني بنجاح ✔');
-    } catch (\Exception $e) {
-      return back()->withErrors([
-        'email' => 'حدث خطأ أثناء إرسال OTP: ' . $e->getMessage()
-      ]);
-    }
-  }
-
-  public function home()
-  {
-    return view('Admin.index');
-  }
-
-  public function resetPassword(Request $request)
-  {
-
-    $request->validate([
-      'token' => 'required',
-      'email' => 'required|email|exists:admins,email',
-      'password' => 'required|min:8|confirmed',
-    ]);
-
-    $reset = DB::table('password_resets')
-      ->where('email', $request->email)
-      ->where('token', $request->token)
-      ->first();
-
-    if (!$reset) {
-      return back()->withErrors(['email' => 'الرمز غير صالح أو منتهي']);
+        return redirect()->intended('/');
     }
 
-    // تحديث الباسورد
-    $admin = Admin::where('email', $request->email)->first();
-    $admin->password = $request->password;
-    $admin->save();
-    // امسح التوكن بعد الاستخدام
-    DB::table('password_resets')->where('email', $request->email)->delete();
+    public function logout(Request $request)
+    {
+        Auth::guard('admin')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect()->route('admin.login.page');
+    }
 
-    return redirect()->route('admin.login')->with('status', 'تم تغيير كلمة المرور بنجاح ✅');
-  }
+    public function showForgotPasswordForm()
+    {
+        return view('Admin.auth.forgot-password');
+    }
+
+    public function sendResetOtp(SendOtpRequest $request)
+    {
+        $email = $request->validated('email');
+        $admin = Admin::whereRaw('LOWER(email) = ?', [$email])->where('is_active', true)->first();
+
+        // Generic response prevents account enumeration.
+        if (!$admin) {
+            return back()->with('status', 'إذا كان البريد مسجلًا ونشطًا فسيصله رابط إعادة التعيين.');
+        }
+
+        try {
+            $plainToken = Str::random(64);
+            DB::table('admin_password_reset_tokens')->updateOrInsert(
+                ['email' => $admin->email],
+                ['token' => Hash::make($plainToken), 'created_at' => now()]
+            );
+
+            $url = route('admin.password.reset', ['token' => $plainToken, 'email' => $admin->email]);
+            Mail::to($admin->email)->send(new AdminPasswordResetMail($url));
+            return back()->with('status', 'إذا كان البريد مسجلًا ونشطًا فسيصله رابط إعادة التعيين.');
+        } catch (\Throwable $e) {
+            Log::error('Admin password reset mail failed', ['admin_id' => $admin->id, 'exception' => $e]);
+            return back()->withErrors(['email' => 'تعذر إرسال رابط إعادة التعيين حاليًا.']);
+        }
+    }
+
+    public function showResetPasswordForm(string $token, Request $request)
+    {
+        return view('Admin.auth.reset-password', ['token' => $token, 'email' => $request->query('email')]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string'],
+            'email' => ['required', 'email:rfc'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ]);
+
+        $record = DB::table('admin_password_reset_tokens')->where('email', mb_strtolower($validated['email']))->first();
+        $expires = now()->subMinutes((int) config('auth.passwords.admins.expire', 30));
+
+        if (!$record || !$record->created_at || $record->created_at < $expires || !Hash::check($validated['token'], $record->token)) {
+            return back()->withInput($request->only('email'))->withErrors(['email' => 'رابط إعادة التعيين غير صالح أو منتهي.']);
+        }
+
+        $admin = Admin::whereRaw('LOWER(email) = ?', [mb_strtolower($validated['email'])])->where('is_active', true)->first();
+        if (!$admin) {
+            return back()->withErrors(['email' => 'تعذر إعادة تعيين كلمة المرور.']);
+        }
+
+        DB::transaction(function () use ($admin, $validated) {
+            $admin->forceFill(['password' => $validated['password'], 'remember_token' => Str::random(60)])->save();
+            DB::table('admin_password_reset_tokens')->where('email', $admin->email)->delete();
+        });
+
+        return redirect()->route('admin.login.page')->with('status', 'تم تغيير كلمة المرور بنجاح.');
+    }
+
+    public function home()
+    {
+        return view('Admin.index');
+    }
 }

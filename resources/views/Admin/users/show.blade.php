@@ -1948,7 +1948,7 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.ajax({
-                        url: "{{ route('admin.user.sendnotify') }}",
+                        url: "{{ route('admin.users.notify') }}",
                         type: 'POST',
                         data: {
                             _token: "{{ csrf_token() }}",

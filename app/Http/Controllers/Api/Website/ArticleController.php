@@ -2,116 +2,64 @@
 
 namespace App\Http\Controllers\Api\Website;
 
-use App\Models\Article;
-use App\Models\ArticleCategory;
-use Illuminate\Http\Request;
-use App\Traits\ApiResponseTrait;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Website\ArticleResource;
-use App\Http\Resources\Website\ArticleCategoryResource;
+use App\Models\Article;
+use App\Traits\ApiResponseTrait;
+use Illuminate\Http\Request;
 
 class ArticleController extends Controller
 {
     use ApiResponseTrait;
 
-    // عرض قائمة المقالات
     public function index(Request $request)
     {
-        $query = Article::with(['category', 'author'])
-            ->active()
-            ->published()
-            ->latest();
-
-        // البحث
+        $query = Article::with(['category', 'author'])->active()->published()->latest('published_at');
         if ($request->filled('search')) {
-            $search = $request->input('search');
+            $search = trim((string) $request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                     ->orWhere('content', 'like', "%{$search}%")
                     ->orWhere('excerpt', 'like', "%{$search}%");
             });
         }
+        if ($request->filled('category_id')) $query->where('category_id', $request->integer('category_id'));
+        if ($request->filled('tag')) $query->whereHas('tags', fn ($q) => $q->where('slug', $request->tag));
+        if ($request->boolean('featured')) $query->featured();
 
-        // التصفية حسب الفئة
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
-        }
-
-        // التصفية حسب الوسم
-        if ($request->filled('tag')) {
-            $query->whereHas('tags', function ($q) use ($request) {
-                $q->where('slug', $request->tag);
-            });
-        }
-
-        // المقالات المميزة
-        if ($request->boolean('featured')) {
-            $query->featured();
-        }
-
-        // الباقة مع pagination
-        $perPage = $request->input('per_page', 12);
-        $articles = $query->paginate($perPage);
-
-        return $this->success(ArticleResource::collection($articles), 'تم جلب المقالات بنجاح');
+        $articles = $query->paginate(min(max((int) $request->input('per_page', 12), 1), 100))->withQueryString();
+        return $this->success([
+            'items' => ArticleResource::collection($articles->getCollection())->resolve(),
+            'pagination' => ['current_page'=>$articles->currentPage(),'last_page'=>$articles->lastPage(),'per_page'=>$articles->perPage(),'total'=>$articles->total()],
+        ], 'تم جلب المقالات بنجاح');
     }
 
-    // عرض مقالة واحدة
     public function show($slug)
     {
-        $article = Article::with(['category', 'author', 'tags', 'comments.replies'])
-            ->where('slug', $slug)
-            ->active()
-            ->published()
-            ->firstOrFail();
-
-        // زيادة عدد المشاهدات
+        $article = Article::with(['category', 'author', 'tags'])
+            ->where('slug', $slug)->active()->published()->firstOrFail();
         $article->incrementViews();
-
+        $article->refresh();
         return $this->success(new ArticleResource($article), 'تم جلب المقالة بنجاح');
     }
 
-    // عرض المقالات المميزة
     public function featured()
     {
-        $articles = Article::with(['category', 'author'])
-            ->active()
-            ->published()
-            ->featured()
-            ->latest()
-            ->take(6)
-            ->get();
-
-        return $this->success(ArticleResource::collection($articles), 'تم جلب المقالات المميزة بنجاح');
+        $items = Article::with(['category','author'])->active()->published()->featured()->latest('published_at')->limit(6)->get();
+        return $this->success(ArticleResource::collection($items), 'تم جلب المقالات المميزة بنجاح');
     }
 
-    // المقالات الأكثر مشاهدة
     public function popular()
     {
-        $articles = Article::with(['category', 'author'])
-            ->active()
-            ->published()
-            ->popular()
-            ->take(6)
-            ->get();
-
-        return $this->success(ArticleResource::collection($articles), 'تم جلب المقالات الأكثر مشاهدة بنجاح');
+        $items = Article::with(['category','author'])->active()->published()->popular()->limit(6)->get();
+        return $this->success(ArticleResource::collection($items), 'تم جلب المقالات الأكثر مشاهدة بنجاح');
     }
 
-    // عرض المقالات ذات الصلة
     public function related($slug)
     {
-        $article = Article::where('slug', $slug)->firstOrFail();
-
-        $relatedArticles = Article::with(['category', 'author'])
-            ->where('category_id', $article->category_id)
-            ->where('id', '!=', $article->id)
-            ->active()
-            ->published()
-            ->latest()
-            ->take(4)
-            ->get();
-
-        return $this->success(ArticleResource::collection($relatedArticles), 'تم جلب المقالات ذات الصلة بنجاح');
+        $article = Article::where('slug', $slug)->active()->published()->firstOrFail();
+        $items = Article::with(['category','author'])->where('category_id', $article->category_id)
+            ->whereKeyNot($article->id)->active()->published()->latest('published_at')->limit(4)->get();
+        return $this->success(ArticleResource::collection($items), 'تم جلب المقالات ذات الصلة بنجاح');
     }
 }

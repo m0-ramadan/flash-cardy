@@ -9,7 +9,9 @@ use App\Models\Image;
 use App\Models\Language;
 use App\Models\Offer;
 use App\Models\Product;
+use App\Models\ProductSerial;
 use App\Models\ProductTextAd;
+use App\Services\Fulfillment\LocalSerialFulfillmentService;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -22,6 +24,8 @@ use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
+    public function __construct(private LocalSerialFulfillmentService $localSerials) {}
+
     /**
      * Display a listing of products.
      */
@@ -196,7 +200,7 @@ class ProductController extends Controller
     /**
      * Store a newly created product with multi-language support.
      */
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
         DB::beginTransaction();
 
@@ -216,72 +220,65 @@ class ProductController extends Controller
             $metaDescriptionData = [];
             $metaKeywordsData = [];
 
-            // معالجة اللغة العربية (إلزامية)
-            if ($request->has('name') && isset($request->name['ar']) && !empty($request->name['ar'])) {
-                $nameData['ar'] = $request->name['ar'];
-            } else {
-                throw new \Exception('الاسم بالعربية مطلوب');
-            }
-
-            if ($request->has('description') && isset($request->description['ar']) && !empty($request->description['ar'])) {
-                $descriptionData['ar'] = $request->description['ar'];
-            } else {
-                $descriptionData['ar'] = ''; // اختياري
-            }
-
-            if ($request->has('price_text') && isset($request->price_text['ar']) && !empty($request->price_text['ar'])) {
-                $priceTextData['ar'] = $request->price_text['ar'];
-            } else {
-                throw new \Exception('نص السعر بالعربية مطلوب');
-            }
-
-            // معالجة باقي اللغات (اختيارية)
-            foreach ($languages as $language) {
-                if ($language->code === 'ar') {
-                    continue;
-                }
-
-                // الاسم
-                if ($request->has('name') && isset($request->name[$language->code]) && !empty($request->name[$language->code])) {
-                    $nameData[$language->code] = $request->name[$language->code];
-                }
-
-                // الوصف
-                if ($request->has('description') && isset($request->description[$language->code]) && !empty($request->description[$language->code])) {
-                    $descriptionData[$language->code] = $request->description[$language->code];
-                }
-
-                // نص السعر
-                if ($request->has('price_text') && isset($request->price_text[$language->code]) && !empty($request->price_text[$language->code])) {
-                    $priceTextData[$language->code] = $request->price_text[$language->code];
-                }
-
-                // meta title
-                if ($request->has('meta_title') && isset($request->meta_title[$language->code]) && !empty($request->meta_title[$language->code])) {
-                    $metaTitleData[$language->code] = $request->meta_title[$language->code];
-                }
-
-                // meta description
-                if ($request->has('meta_description') && isset($request->meta_description[$language->code]) && !empty($request->meta_description[$language->code])) {
-                    $metaDescriptionData[$language->code] = $request->meta_description[$language->code];
-                }
-
-                // meta keywords
-                if ($request->has('meta_keywords') && isset($request->meta_keywords[$language->code]) && !empty($request->meta_keywords[$language->code])) {
-                    $metaKeywordsData[$language->code] = $request->meta_keywords[$language->code];
+            // جمع بيانات الاسم لكافة اللغات المرسلة
+            if ($request->has('name') && is_array($request->name)) {
+                foreach ($request->name as $locale => $val) {
+                    if (!empty($val)) {
+                        $nameData[$locale] = $val;
+                    }
                 }
             }
 
-            // إذا كانت اللغات الأخرى فارغة، نقوم بترجمتها تلقائياً من العربية
-            $needsTranslation = false;
-            foreach ($languages as $language) {
-                if ($language->code !== 'ar' && !isset($nameData[$language->code])) {
-                    $needsTranslation = true;
-                    break;
+            // جمع بيانات الوصف
+            if ($request->has('description') && is_array($request->description)) {
+                foreach ($request->description as $locale => $val) {
+                    if (!empty($val)) {
+                        $descriptionData[$locale] = $val;
+                    }
                 }
             }
 
-            if ($needsTranslation && $request->input('auto_translate', true)) {
+            // جمع بيانات نص السعر
+            if ($request->has('price_text') && is_array($request->price_text)) {
+                foreach ($request->price_text as $locale => $val) {
+                    if (!empty($val)) {
+                        $priceTextData[$locale] = $val;
+                    }
+                }
+            }
+
+            // إذا لم يتوفر نص السعر بالعربية، نضع قيمة افتراضية مناسبة
+            if (empty($priceTextData['ar']) && $request->filled('price')) {
+                $priceTextData['ar'] = $request->price . ' ' . ($request->sign_currency ?? 'ر.س');
+            }
+
+            // جمع بيانات SEO
+            if ($request->has('meta_title') && is_array($request->meta_title)) {
+                foreach ($request->meta_title as $locale => $val) {
+                    if (!empty($val)) {
+                        $metaTitleData[$locale] = $val;
+                    }
+                }
+            }
+
+            if ($request->has('meta_description') && is_array($request->meta_description)) {
+                foreach ($request->meta_description as $locale => $val) {
+                    if (!empty($val)) {
+                        $metaDescriptionData[$locale] = $val;
+                    }
+                }
+            }
+
+            if ($request->has('meta_keywords') && is_array($request->meta_keywords)) {
+                foreach ($request->meta_keywords as $locale => $val) {
+                    if (!empty($val)) {
+                        $metaKeywordsData[$locale] = $val;
+                    }
+                }
+            }
+
+            // ترجمة تلقائية للغات النشطة الأخرى إذا كانت فارغة ومطلوب ترجمتها
+            if ($request->input('auto_translate', true) && !empty($nameData['ar'])) {
                 foreach ($languages as $language) {
                     if ($language->code === 'ar' || isset($nameData[$language->code])) {
                         continue;
@@ -309,7 +306,7 @@ class ProductController extends Controller
                         }
                     }
 
-                    // ترجمة SEO إذا وجد
+                    // ترجمة SEO
                     if (!empty($metaTitleData['ar'])) {
                         $translatedMetaTitle = $this->translateText($metaTitleData['ar'], $language->code);
                         if ($translatedMetaTitle) {
@@ -354,12 +351,16 @@ class ProductController extends Controller
             $product->status_id = $request->status_id;
             $product->has_discount = $request->boolean('has_discount');
             $product->includes_tax = $request->boolean('includes_tax');
-            $product->includes_shipping = $request->boolean('includes_shipping') ?? false;
+            $product->includes_shipping = $request->boolean('includes_shipping');
             $product->sku = $request->sku;
+            $this->applyOperationalFields($product, $request);
+            if ($request->filled('sign_currency')) {
+                $product->sign_currency = $request->sign_currency;
+            }
 
             // إضافة created_by إذا كان موجوداً
-            if (auth()->check()) {
-                $product->created_by = auth()->id();
+            if (auth('admin')->check()) {
+                $product->created_by = auth('admin')->id();
             }
 
             $product->save();
@@ -456,13 +457,23 @@ class ProductController extends Controller
                 }
             }
 
+            // Initial local voucher inventory can be entered while the product is created.
+            if ($product->fulfillment_source === 'local_serials' && !empty($request->input('serials', []))) {
+                $this->localSerials->addCodes(
+                    $product->id,
+                    (array) $request->input('serials', []),
+                    auth('admin')->id(),
+                    'product_form'
+                );
+            }
+
             DB::commit();
 
             // =============================================================
             // 8. تسجيل النشاط
             // =============================================================
 
-            if (class_exists('Activity') && auth()->check()) {
+            if (function_exists('activity') && auth()->check()) {
                 activity()
                     ->causedBy(auth()->user())
                     ->performedOn($product)
@@ -493,8 +504,8 @@ class ProductController extends Controller
 
             // حذف الصور المرفوعة إذا فشلت العملية
             if (isset($product) && $product->exists) {
-                if ($product->image && Storage::disk('public')->exists($product->image)) {
-                    Storage::disk('public')->delete($product->image);
+                if ($product->image_path && Storage::disk('public')->exists($product->image_path)) {
+                    Storage::disk('public')->delete($product->image_path);
                 }
 
                 foreach ($product->images as $image) {
@@ -512,31 +523,15 @@ class ProductController extends Controller
     }
 
     /**
-     * دالة مساعدة للترجمة (يمكنك استبدالها بخدمة الترجمة الفعلية)
+     * دالة مساعدة للترجمة
      */
     private function translateText($text, $targetLang)
     {
-        // إذا كان النص فارغاً، نعيد null
         if (empty($text)) {
             return null;
         }
 
-        // هنا يمكنك دمج خدمة ترجمة مثل Google Translate أو DeepL
-        // هذا مثال بسيط للترجمة التجريبية
-
-        // للاختبار، نضيف لاحقة للغة
-        $suffixes = [
-            'en' => ' (English)',
-            'fr' => ' (Français)',
-            'de' => ' (Deutsch)',
-            'es' => ' (Español)',
-            'it' => ' (Italiano)',
-            'tr' => ' (Türkçe)',
-            'ur' => ' (اردو)',
-            'fa' => ' (فارسی)',
-        ];
-
-        return $text . ($suffixes[$targetLang] ?? " [{$targetLang}]");
+        return $text;
     }
 
     /**
@@ -579,7 +574,6 @@ class ProductController extends Controller
             'discount_value' => 'nullable|required_if:has_discount,1|numeric|min:0',
 
             'includes_tax' => 'nullable|boolean',
-            'includes_shipping' => 'nullable|boolean',
 
             'offers' => 'nullable|array',
             'offers.*' => 'exists:offers,id',
@@ -602,12 +596,56 @@ class ProductController extends Controller
     /**
      * Display the specified product.
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $product = Product::with(['category', 'images', 'reviews', 'offers', 'adsText'])->findOrFail($id);
+        $product = Product::with(['category', 'images', 'reviews.user', 'offers', 'adsText'])->findOrFail($id);
         $languages = Language::where('is_active', true)->get();
 
-        return view('Admin.product.show', compact('product', 'languages'));
+        // تحديث حالات الأكواد المنتهية تلقائياً
+        if (isset($this->localSerials)) {
+            $this->localSerials->refreshExpiredStatuses($product->id);
+        }
+
+        // استعلام الأكواد التسلسلية مع التصفية والبحث والـ Pagination
+        $serialsQuery = $product->serials()->with(['order', 'orderItem', 'creator'])->latest();
+
+        if ($request->filled('serial_status')) {
+            $serialsQuery->where('status', $request->serial_status);
+        }
+
+        if ($request->filled('serial_expires')) {
+            if ($request->serial_expires === 'expired') {
+                $serialsQuery->whereNotNull('expires_at')->where('expires_at', '<=', now());
+            } elseif ($request->serial_expires === 'soon') {
+                $serialsQuery->whereBetween('expires_at', [now(), now()->addDays(30)]);
+            }
+        }
+
+        if ($request->filled('serial_search')) {
+            $search = trim($request->serial_search);
+            $searchHash = ProductSerial::hashCode($search);
+            $serialsQuery->where(function ($q) use ($search, $searchHash) {
+                $q->where('id', $search)
+                    ->orWhere('code_hash', $searchHash)
+                    ->orWhere('batch_reference', 'like', "%{$search}%")
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    ->orWhereHas('order', function ($oq) use ($search) {
+                        $oq->where('order_number', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $serials = $serialsQuery->paginate(20, ['*'], 'serials_page')->withQueryString();
+
+        $serialStats = [
+            'total' => $product->serials()->count(),
+            'available' => $product->serials()->usable()->count(),
+            'assigned' => $product->serials()->whereIn('status', [ProductSerial::ASSIGNED, ProductSerial::DELIVERED])->count(),
+            'expired' => $product->serials()->where('status', ProductSerial::EXPIRED)->count(),
+            'disabled' => $product->serials()->where('status', ProductSerial::DISABLED)->count(),
+        ];
+
+        return view('Admin.product.show', compact('product', 'languages', 'serials', 'serialStats'));
     }
 
     /**
@@ -775,7 +813,16 @@ class ProductController extends Controller
                 'includes_tax' => $request->boolean('includes_tax'),
                 'includes_shipping' => $request->boolean('includes_shipping'),
                 'sku' => $request->sku,
+                'sign_currency' => $request->input('sign_currency', $product->sign_currency ?? 'EGP'),
             ]);
+
+            $this->applyOperationalFields($product, $request);
+            $product->save();
+
+            if (auth('admin')->check()) {
+                $product->updated_by = auth('admin')->id();
+                $product->save();
+            }
 
             // =============================================================
             // 3. معالجة الصورة الرئيسية
@@ -783,30 +830,17 @@ class ProductController extends Controller
 
             // حذف الصورة إذا طلب ذلك
             if ($request->has('delete_image') && $request->delete_image) {
-                // حذف الصورة من التخزين
-                if ($product->image && Storage::disk('public')->exists($product->image)) {
-                    Storage::disk('public')->delete($product->image);
-                }
-
-                // حذف سجلات الصور المرتبطة
-                $product->images()->where('type', 'main')->each(function ($img) {
-                    Storage::disk('public')->delete($img->path);
-                    $img->delete();
-                });
-
-                $product->update(['image' => null]);
+                // Keep historical media rows/files because paid order snapshots may reference them.
+                $product->images()->where('type', 'main')->update(['is_primary' => 0, 'is_active' => 0]);
+                $product->update(['image_path' => null]);
             }
 
             // رفع صورة جديدة
             if ($request->hasFile('image')) {
-                // حذف الصور القديمة
-                $product->images()->where('type', 'main')->each(function ($img) {
-                    Storage::disk('public')->delete($img->path);
-                    $img->delete();
-                });
+                $product->images()->where('type', 'main')->update(['is_primary' => 0]);
 
                 $path = $request->file('image')->store('products', 'public');
-                $product->update(['image' => $path]);
+                $product->update(['image_path' => $path]);
 
                 $product->images()->create([
                     'path' => $path,
@@ -827,6 +861,7 @@ class ProductController extends Controller
                     [
                         'discount_value' => $request->discount_value,
                         'discount_type' => $request->input('discount_type', 'percentage'),
+                        'is_active' => 1,
                     ]
                 );
             } else {
@@ -865,11 +900,16 @@ class ProductController extends Controller
                             // البحث عن النص المترجم في المصفوفة
                             if (isset($ad[$language->code]) && !empty($ad[$language->code])) {
                                 $textAdData[$language->code] = $ad[$language->code];
+                            } elseif ($request->input('auto_translate', true)) {
+                                $translatedAd = $this->translateText($ad['name'], $language->code);
+                                if ($translatedAd) {
+                                    $textAdData[$language->code] = $translatedAd;
+                                }
                             }
                         }
 
                         $product->adsText()->create([
-                            'name' => json_encode($textAdData, JSON_UNESCAPED_UNICODE)
+                            'name' => $textAdData
                         ]);
                     }
                 }
@@ -909,17 +949,28 @@ class ProductController extends Controller
                 }
             }
 
+            if ($product->fulfillment_source === 'local_serials' && !empty($request->input('serials', []))) {
+                $this->localSerials->addCodes(
+                    $product->id,
+                    (array) $request->input('serials', []),
+                    auth('admin')->id(),
+                    'product_form'
+                );
+            }
+
             DB::commit();
 
             // تسجيل النشاط
-            activity()
-                ->causedBy(auth()->user())
-                ->performedOn($product)
-                ->withProperties([
-                    'changes' => $product->getChanges(),
-                    'ip' => request()->ip()
-                ])
-                ->log('تم تحديث المنتج');
+            if (function_exists('activity') && auth()->check()) {
+                activity()
+                    ->causedBy(auth()->user())
+                    ->performedOn($product)
+                    ->withProperties([
+                        'changes' => $product->getChanges(),
+                        'ip' => request()->ip()
+                    ])
+                    ->log('تم تحديث المنتج');
+            }
 
             // رسالة نجاح مع عدد اللغات المحدثة
             $updatedLanguages = count(array_filter([
@@ -952,14 +1003,8 @@ class ProductController extends Controller
     {
         try {
             $product = Product::findOrFail($id);
-
-            // Delete images from storage
-            foreach ($product->images as $image) {
-                Storage::disk('public')->delete($image->path);
-                $image->delete();
-            }
-
-            // Delete product
+            // Product removal is intentionally soft. Media and historical snapshots must
+            // remain available for old paid orders and issued voucher records.
             $product->delete();
 
             return response()->json([
@@ -990,13 +1035,6 @@ class ProductController extends Controller
             $products = Product::whereIn('id', $ids)->get();
 
             foreach ($products as $product) {
-                // Delete images from storage
-                foreach ($product->images as $image) {
-                    Storage::disk('public')->delete($image->path);
-                    $image->delete();
-                }
-
-                // Delete product
                 $product->delete();
             }
 
@@ -1103,11 +1141,9 @@ class ProductController extends Controller
                 'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             ]);
 
-            // Delete old images
-            $product->images()->each(function ($img) {
-                Storage::disk('public')->delete($img->path);
-                $img->delete();
-            });
+            // Keep old media records/files for historical order snapshots. The previous
+            // primary image is simply demoted and the new one becomes primary.
+            $product->images()->update(['is_primary' => 0]);
 
             // Save new image
             $imagePath = $request->file('image')->store('products', 'public');
@@ -1122,7 +1158,7 @@ class ProductController extends Controller
             $image->save();
 
             // Update product image reference
-            $product->update(['image' => $imagePath]);
+            $product->update(['image_path' => $imagePath]);
 
             $imageUrl = asset('storage/' . $imagePath);
 
@@ -1142,6 +1178,151 @@ class ProductController extends Controller
                 'success' => false,
                 'message' => 'فشل في تحديث الصورة: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Bulk product actions used by the dashboard. Every action keeps historical order/media data intact.
+     */
+    public function bulkAction(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer',
+            'action' => 'required|in:activate,deactivate,draft,delete,restore',
+        ]);
+
+        $query = Product::withTrashed()->whereIn('id', $data['ids']);
+        $count = 0;
+        DB::transaction(function () use ($query, $data, &$count) {
+            $products = $query->lockForUpdate()->get();
+            foreach ($products as $product) {
+                match ($data['action']) {
+                    'activate' => $product->forceFill(['status_id' => 1])->save(),
+                    'deactivate' => $product->forceFill(['status_id' => 2])->save(),
+                    'draft' => $product->forceFill(['status_id' => 3])->save(),
+                    'delete' => $product->trashed() ?: $product->delete(),
+                    'restore' => $product->trashed() ? $product->restore() : true,
+                };
+                $count++;
+            }
+        }, 3);
+
+        return response()->json(['success' => true, 'message' => "تم تنفيذ الإجراء على {$count} منتج."]);
+    }
+
+    public function toggleStatus($id)
+    {
+        $product = Product::withTrashed()->findOrFail($id);
+        abort_if($product->trashed(), 422, 'استرجع المنتج أولاً قبل تغيير حالته.');
+        $product->forceFill(['status_id' => (int) $product->status_id === 1 ? 2 : 1, 'updated_by' => auth('admin')->id()])->save();
+
+        return response()->json(['success' => true, 'status_id' => $product->status_id]);
+    }
+
+    public function restore($id)
+    {
+        $product = Product::withTrashed()->findOrFail($id);
+        if ($product->trashed()) $product->restore();
+        return back()->with('success', 'تم استرجاع المنتج بدون فقد أي بيانات أو أكواد تاريخية.');
+    }
+
+    public function duplicate(Product $product)
+    {
+        $copy = DB::transaction(function () use ($product) {
+            $copy = $product->replicate(['external_id', 'reserved_stock', 'sold_stock']);
+            $baseSku = trim((string) $product->sku) ?: 'PRODUCT-' . $product->id;
+            $copy->sku = Str::limit($baseSku . '-COPY-' . strtoupper(Str::random(5)), 100, '');
+            $copy->status_id = 3;
+            $copy->stock = 0;
+            $copy->reserved_stock = 0;
+            $copy->sold_stock = 0;
+            $copy->external_id = null;
+            $copy->fulfillment_source = $product->fulfillment_source === 'like4app' ? 'none' : $product->fulfillment_source;
+            $copy->created_by = auth('admin')->id();
+            $copy->updated_by = null;
+            $copy->save();
+
+            $copy->offers()->sync($product->offers()->pluck('offers.id')->all());
+            if ($product->discount) {
+                $copy->discount()->create($product->discount->only(['discount_value', 'discount_type', 'is_active']));
+            }
+            foreach ($product->images as $image) {
+                $copy->images()->create($image->only(['path', 'type', 'is_primary', 'order', 'is_active']));
+            }
+            // Serial codes are intentionally NEVER duplicated.
+            return $copy;
+        }, 3);
+
+        return redirect()->route('admin.products.edit', $copy->id)
+            ->with('success', 'تم نسخ المنتج كمسودة. لم يتم نسخ الأكواد التسلسلية أو ربط Like4App لتجنب التكرار.');
+    }
+
+    public function export()
+    {
+        $filename = 'products-' . now()->format('Ymd-His') . '.csv';
+        return response()->streamDownload(function () {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['ID', 'SKU', 'Name', 'Category', 'Price', 'Currency', 'Status', 'Type', 'Fulfillment', 'Mode', 'Available Serials']);
+            Product::withTrashed()->with('category')->withCount(['serials as available_serials_count' => fn($q) => $q->usable()])
+                ->orderBy('id')->chunk(500, function ($products) use ($out) {
+                    foreach ($products as $product) {
+                        $safe = fn($value) => preg_match('/^[=+\-@]/', (string)$value) ? "'" . $value : $value;
+                        fputcsv($out, [
+                            $product->id,
+                            $safe($product->sku),
+                            $safe($product->getTranslation('name', 'ar', false)),
+                            $safe($product->category?->getTranslation('name', 'ar', false) ?? ''),
+                            $product->price,
+                            $product->sign_currency,
+                            $product->status_id,
+                            $product->type,
+                            $product->fulfillment_source,
+                            $product->fulfillment_mode,
+                            $product->available_serials_count,
+                        ]);
+                    }
+                });
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function applyOperationalFields(Product $product, StoreProductRequest $request): void
+    {
+        $source = (string) $request->input('fulfillment_source', $product->fulfillment_source ?: 'none');
+        $mode = (string) $request->input('fulfillment_mode', $product->fulfillment_mode ?: 'manual');
+
+        // Backward compatibility: an existing Like4App external id still means remote fulfilment
+        // unless the administrator explicitly selected another source.
+        if (!$request->has('fulfillment_source') && $request->filled('external_id')) {
+            $source = 'like4app';
+            $mode = 'automatic';
+        }
+
+        $digital = in_array($source, ['local_serials', 'like4app'], true);
+        $product->fill([
+            'subtitle' => $request->input('subtitle'),
+            'brand' => $request->input('brand'),
+            'region' => $request->input('region'),
+            'denomination' => $request->input('denomination'),
+            'validity_text' => $request->input('validity_text'),
+            'is_featured' => $request->boolean('is_featured'),
+            'is_best_seller' => $request->boolean('is_best_seller'),
+            'type' => $request->input('type', $digital ? 'digital_code' : ($product->type ?: 'product')),
+            'inventory_type' => $digital ? 'digital' : $request->input('inventory_type', $product->inventory_type ?: 'physical'),
+            'track_stock' => $digital ? false : $request->boolean('track_stock', true),
+            'max_quantity' => (int) $request->input('max_quantity', $product->max_quantity ?: 0),
+            'instructions' => $request->input('instructions'),
+            'terms' => $request->input('terms'),
+            'url' => $request->input('url'),
+            'external_id' => $request->input('external_id'),
+            'fulfillment_source' => $source,
+            'fulfillment_mode' => $mode,
+            'allow_serial_backorder' => $request->boolean('allow_serial_backorder', true),
+        ]);
+        if ($digital) {
+            $product->track_stock = false;
+            $product->reserved_stock = 0;
         }
     }
     // ProductController.php - إضافة هذه الطرق
@@ -2091,7 +2272,6 @@ class ProductController extends Controller
             'discount_type' => 'nullable|in:percentage,fixed',
             'discount_value' => 'nullable|numeric|min:0',
             'includes_tax' => 'nullable|boolean',
-            'includes_shipping' => 'nullable|boolean',
             'text_ads' => 'nullable|array',
             'text_ads.*.name' => 'nullable|string|max:500',
             'offers' => 'nullable|array',
@@ -2108,7 +2288,7 @@ class ProductController extends Controller
             $product->stock = $request->stock;
             $product->status_id = $request->status_id;
             $product->includes_tax = $request->boolean('includes_tax');
-            $product->includes_shipping = $request->boolean('includes_shipping');
+            $product->includes_shipping = false;
             $product->created_by = auth()->id();
 
             // حفظ الصورة الرئيسية
@@ -2206,10 +2386,12 @@ class ProductController extends Controller
             }
 
             // تسجيل النشاط
-            activity()
-                ->causedBy(auth()->user())
-                ->performedOn($product)
-                ->log('أنشأ منتجاً جديداً بالذكاء الاصطناعي');
+            if (function_exists('activity') && auth()->check()) {
+                activity()
+                    ->causedBy(auth()->user())
+                    ->performedOn($product)
+                    ->log('أنشأ منتجاً جديداً بالذكاء الاصطناعي');
+            }
 
             DB::commit();
 

@@ -3,43 +3,25 @@
 namespace App\Http\Requests\Website;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class SocialMediaLoginRequest extends FormRequest
 {
-    /**
-     * السماح لكل المستخدمين بإرسال الطلب
-     */
-    public function authorize(): bool
-    {
-        return true;
-    }
+    public function authorize(): bool { return true; }
 
-    /**
-     * قواعد التحقق من البيانات
-     */
     public function rules(): array
     {
         return [
-            'provider'    => 'required|in:google,facebook,apple',
-            'provider_id' => 'required|string',
-            'email'       => 'nullable|email',
-            'name'        => 'nullable|string|max:255',
-            'image'       => 'nullable|string',
-        ];
-    }
-
-
-    public function messages(): array
-    {
-        return [
-            'provider.required'    => 'مزود الدخول مطلوب.',
-            'provider.in'          => 'مزود الدخول يجب أن يكون google أو facebook أو apple.',
-            'provider_id.required' => 'معرف المزود مطلوب.',
-            'provider_id.string'   => 'معرف المزود يجب أن يكون نصًا.',
-            'email.email'          => 'البريد الإلكتروني غير صالح.',
-            'name.string'          => 'الاسم يجب أن يكون نصًا.',
-            'name.max'             => 'الاسم لا يمكن أن يزيد عن 255 حرفًا.',
-            'image.string'         => 'رابط الصورة يجب أن يكون نصًا.',
+            'provider' => ['required', Rule::in(['google', 'facebook', 'apple'])],
+            'auth_source' => ['nullable', Rule::in(['firebase', 'google', 'facebook', 'apple'])],
+            'id_token' => ['nullable', 'string', 'max:10000'],
+            'access_token' => ['nullable', 'string', 'max:10000'],
+            'authorization_code' => ['nullable', 'string', 'max:10000'],
+            'name' => ['nullable', 'string', 'max:255'],
+            // Legacy fields stay accepted during the transition, but the backend never trusts them.
+            'provider_id' => ['nullable', 'string', 'max:512'],
+            'email' => ['nullable', 'email:rfc', 'max:255'],
+            'image' => ['nullable', 'url', 'max:2048'],
         ];
     }
 }

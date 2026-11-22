@@ -2,430 +2,166 @@
 
 namespace App\Http\Controllers\Api\Website;
 
-use App\Models\Review;
-use App\Models\Product;
-use Illuminate\Http\Request;
-use App\Traits\ApiResponseTrait;
-use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\Website\ReviewResource;
 use App\Http\Requests\Website\Review\StoreReviewRequest;
 use App\Http\Requests\Website\Review\UpdateReviewRequest;
-
+use App\Http\Resources\Website\ReviewResource;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\Review;
+use App\Traits\ApiResponseTrait;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 
 class ReviewController extends Controller
 {
     use ApiResponseTrait;
 
-    /**
-     * 🔹 عرض جميع التقييمات مع الفلترة والترتيب
-     */
     public function index(Request $request)
     {
-        try {
-            // التحقق من وجود منتج محدد
-            $productId = $request->get('product_id');
+        $query = Review::query()->approved()->with(['product', 'user'])->latest();
+        $this->applyFilters($query, $request);
+        $reviews = $query->paginate(min(max((int) $request->input('per_page', 15), 1), 100))->withQueryString();
 
-            $query = Review::with(['product', 'user'])
-                ->latest();
-
-            // فلتر حسب المنتج
-            if ($productId) {
-                $query->where('product_id', $productId);
-            }
-
-            // فلتر حسب المستخدم
-            if ($request->has('user_id')) {
-                $query->where('user_id', $request->user_id);
-            }
-
-            // فلتر حسب التقييم
-            if ($request->has('rating')) {
-                $rating = (int) $request->rating;
-                if (in_array($rating, [1, 2, 3, 4, 5])) {
-                    $query->where('rating', $rating);
-                }
-            }
-
-            // فلتر حسب نطاق التقييم
-            if ($request->has('min_rating')) {
-                $query->where('rating', '>=', (int) $request->min_rating);
-            }
-
-            if ($request->has('max_rating')) {
-                $query->where('rating', '<=', (int) $request->max_rating);
-            }
-
-            // فلتر حسب التاريخ
-            if ($request->has('date_from')) {
-                $query->whereDate('created_at', '>=', $request->date_from);
-            }
-
-            if ($request->has('date_to')) {
-                $query->whereDate('created_at', '<=', $request->date_to);
-            }
-
-            // ترتيب حسب
-            if ($request->has('sort_by')) {
-                $sortBy = $request->sort_by;
-                $direction = $request->get('sort_direction', 'desc');
-
-                $allowedSort = ['created_at', 'rating', 'updated_at'];
-                if (in_array($sortBy, $allowedSort)) {
-                    $query->orderBy($sortBy, $direction);
-                }
-            }
-
-            // البحث في التعليقات
-            if ($request->has('search')) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('comment', 'like', "%{$search}%")
-                        ->orWhereHas('product', function ($q) use ($search) {
-                            $q->where('name', 'like', "%{$search}%");
-                        })
-                        ->orWhereHas('user', function ($q) use ($search) {
-                            $q->where('name', 'like', "%{$search}%");
-                        });
-                });
-            }
-
-            // هل يحتوي على تعليقات فقط
-            if ($request->boolean('has_comment')) {
-                $query->whereNotNull('comment')->where('comment', '!=', '');
-            }
-
-            // الباجات
-            $perPage = $request->get('per_page', 15);
-            $reviews = $query->paginate($perPage);
-
-            // إحصائيات إضافية للمنتج
-            $stats = null;
-            if ($productId) {
-                $product = Product::find($productId);
-                if ($product) {
-                    $stats = [
-                        'average_rating' => round($product->average_rating, 1),
-                        'total_reviews' => $product->reviews()->count(),
-                        'rating_distribution' => $this->getRatingDistribution($productId),
-                    ];
-                }
-            }
-
-            return $this->success([
-                'reviews' => ReviewResource::collection($reviews),
-                'pagination' => [
-                    'total' => $reviews->total(),
-                    'per_page' => $reviews->perPage(),
-                    'current_page' => $reviews->currentPage(),
-                    'last_page' => $reviews->lastPage(),
-                    'from' => $reviews->firstItem(),
-                    'to' => $reviews->lastItem(),
-                ],
-                'stats' => $stats,
-                'filters' => $request->only([
-                    'product_id',
-                    'user_id',
-                    'rating',
-                    'min_rating',
-                    'max_rating',
-                    'search'
-                ]),
-            ], 'تم جلب التقييمات بنجاح');
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء جلب التقييمات', 500, [
-                'exception' => $e->getMessage(),
-            ]);
-        }
+        return $this->success([
+            'reviews' => ReviewResource::collection($reviews->getCollection())->resolve(),
+            'pagination' => $this->pagination($reviews),
+        ], 'تم جلب التقييمات بنجاح');
     }
 
-    /**
-     * 🔹 عرض تقييم معين
-     */
     public function show($id)
     {
-        try {
-            $review = Review::with(['product', 'user'])->findOrFail($id);
-
-            return $this->success(
-                new ReviewResource($review),
-                'تم جلب التقييم بنجاح'
-            );
-        } catch (\Exception $e) {
-            return $this->error('التقييم غير موجود', 404);
-        }
+        $review = Review::query()->approved()->with(['product', 'user'])->find($id);
+        return $review
+            ? $this->success(new ReviewResource($review), 'تم جلب التقييم بنجاح')
+            : $this->error('التقييم غير موجود', 404);
     }
 
-    /**
-     * 🔹 إنشاء تقييم جديد
-     */
     public function store(StoreReviewRequest $request)
     {
+        $user = $request->user();
+        $product = Product::query()->whereKey($request->product_id)->where('status_id', 1)->first();
+        if (!$product) return $this->error('المنتج غير موجود أو غير متاح', 404);
+
+        $verified = Order::query()
+            ->where('user_id', $user->id)
+            ->where('status_payment', 'paid')
+            ->whereHas('items', fn ($q) => $q->where('product_id', $product->id))
+            ->exists();
+
         try {
-            // التحقق من أن المستخدم لم يقم بتقييم هذا المنتج من قبل
-            $existingReview = Review::where('user_id', auth()->id())
-                ->where('product_id', $request->product_id)
-                ->first();
-
-            if ($existingReview) {
-                return $this->error('لقد قمت بتقييم هذا المنتج من قبل', 400);
-            }
-
-            // التحقق من أن المستخدم قد طلب هذا المنتج (اختياري)
-            // يمكنك إضافة هذا الشرط إذا أردت
-
-            // إنشاء التقييم
             $review = Review::create([
-                'user_id' => auth()->id(),
-                'product_id' => $request->product_id,
-                'rating' => $request->rating,
-                'comment' => $request->comment,
+                'user_id' => $user->id,
+                'product_id' => $product->id,
+                'rating' => (int) $request->rating,
+                'comment' => $this->cleanText($request->comment),
+                'is_approved' => false,
+                'is_verified_purchase' => $verified,
             ]);
-
-            // تحديث متوسط تقييمات المنتج
-            $this->updateProductRating($request->product_id);
-
-            return $this->success(
-                new ReviewResource($review->load(['product', 'user'])),
-                'تم إضافة التقييم بنجاح',
-                201
-            );
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء إضافة التقييم', 500, [
-                'exception' => $e->getMessage(),
-            ]);
+        } catch (QueryException $e) {
+            if (str_contains(strtolower($e->getMessage()), 'duplicate')) {
+                return $this->error('لقد قمت بتقييم هذا المنتج من قبل', 422);
+            }
+            report($e);
+            return $this->error('تعذر حفظ التقييم حالياً', 500);
         }
+
+        return $this->success(new ReviewResource($review->load(['product', 'user'])), 'تم استلام التقييم وسيظهر بعد المراجعة', 201);
     }
 
-    /**
-     * 🔹 تحديث التقييم
-     */
     public function update(UpdateReviewRequest $request, $id)
     {
-        try {
-            $review = Review::findOrFail($id);
+        $review = Review::query()->where('user_id', $request->user()->id)->find($id);
+        if (!$review) return $this->error('التقييم غير موجود أو لا تملك صلاحية تعديله', 404);
 
-            // التحقق من أن المستخدم هو صاحب التقييم
-            if ($review->user_id !== auth()->id() && !auth()->user()->is_admin) {
-                return $this->error('غير مسموح لك بتعديل هذا التقييم', 403);
-            }
+        $review->fill(array_filter([
+            'rating' => $request->input('rating'),
+            'comment' => $request->has('comment') ? $this->cleanText($request->input('comment')) : null,
+        ], fn ($v) => $v !== null));
+        $review->is_approved = false;
+        $review->moderated_by = null;
+        $review->moderated_at = null;
+        $review->save();
 
-            // تحديث التقييم
-            $review->update([
-                'rating' => $request->rating ?? $review->rating,
-                'comment' => $request->comment ?? $review->comment,
-            ]);
-
-            // تحديث متوسط تقييمات المنتج
-            $this->updateProductRating($review->product_id);
-
-            return $this->success(
-                new ReviewResource($review->load(['product', 'user'])),
-                'تم تحديث التقييم بنجاح'
-            );
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء تحديث التقييم', 500, [
-                'exception' => $e->getMessage(),
-            ]);
-        }
+        return $this->success(new ReviewResource($review->load(['product', 'user'])), 'تم تحديث التقييم وسيعاد مراجعته');
     }
 
-    /**
-     * 🔹 حذف التقييم
-     */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        try {
-            $review = Review::findOrFail($id);
-
-            // التحقق من أن المستخدم هو صاحب التقييم أو أدمن
-            if ($review->user_id !== auth()->id() && !auth()->user()->is_admin) {
-                return $this->error('غير مسموح لك بحذف هذا التقييم', 403);
-            }
-
-            $productId = $review->product_id;
-            $review->delete();
-
-            // تحديث متوسط تقييمات المنتج بعد الحذف
-            $this->updateProductRating($productId);
-
-            return $this->success(
-                null,
-                'تم حذف التقييم بنجاح'
-            );
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء حذف التقييم', 500, [
-                'exception' => $e->getMessage(),
-            ]);
-        }
+        $review = Review::query()->where('user_id', $request->user()->id)->find($id);
+        if (!$review) return $this->error('التقييم غير موجود أو لا تملك صلاحية حذفه', 404);
+        $review->delete();
+        return $this->success(null, 'تم حذف التقييم بنجاح');
     }
 
-    /**
-     * 🔹 الحصول على تقييمات المستخدم الحالي
-     */
     public function myReviews(Request $request)
     {
-        try {
-            $query = Review::with(['product', 'user'])
-                ->where('user_id', auth()->id())
-                ->latest();
+        $query = Review::query()->where('user_id', $request->user()->id)->with(['product', 'user'])->latest();
+        $this->applyFilters($query, $request, false);
+        $reviews = $query->paginate(min(max((int) $request->input('per_page', 15), 1), 100))->withQueryString();
 
-            // فلتر حسب المنتج
-            if ($request->has('product_id')) {
-                $query->where('product_id', $request->product_id);
-            }
-
-            // فلتر حسب التقييم
-            if ($request->has('rating')) {
-                $query->where('rating', (int) $request->rating);
-            }
-
-            // الباجات
-            $perPage = $request->get('per_page', 15);
-            $reviews = $query->paginate($perPage);
-
-            // إحصائيات
-            $stats = [
-                'total_reviews' => $reviews->total(),
-                'average_rating' => round($query->avg('rating'), 1),
-            ];
-
-            return $this->success([
-                'reviews' => ReviewResource::collection($reviews),
-                'stats' => $stats,
-                'pagination' => [
-                    'total' => $reviews->total(),
-                    'per_page' => $reviews->perPage(),
-                    'current_page' => $reviews->currentPage(),
-                    'last_page' => $reviews->lastPage(),
-                ],
-            ], 'تم جلب تقييماتك بنجاح');
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء جلب تقييماتك', 500, [
-                'exception' => $e->getMessage(),
-            ]);
-        }
+        return $this->success([
+            'reviews' => ReviewResource::collection($reviews->getCollection())->resolve(),
+            'pagination' => $this->pagination($reviews),
+        ], 'تم جلب تقييماتك بنجاح');
     }
 
-    /**
-     * 🔹 الحصول على تقييمات منتج معين
-     */
     public function productReviews($productId, Request $request)
     {
-        try {
-            $product = Product::findOrFail($productId);
-
-            $query = Review::with(['user'])
-                ->where('product_id', $productId)
-                ->latest();
-
-            // فلتر حسب التقييم
-            if ($request->has('rating')) {
-                $rating = (int) $request->rating;
-                if (in_array($rating, [1, 2, 3, 4, 5])) {
-                    $query->where('rating', $rating);
-                }
-            }
-
-            // ترتيب حسب
-            if ($request->has('sort_by')) {
-                $sortBy = $request->sort_by;
-                $direction = $request->get('sort_direction', 'desc');
-
-                if ($sortBy === 'rating') {
-                    $query->orderBy('rating', $direction);
-                } elseif ($sortBy === 'date') {
-                    $query->orderBy('created_at', $direction);
-                }
-            }
-
-            // الباجات
-            $perPage = $request->get('per_page', 10);
-            $reviews = $query->paginate($perPage);
-
-            // إحصائيات المنتج
-            $stats = [
-                'average_rating' => round($product->average_rating, 1),
-                'total_reviews' => $product->reviews()->count(),
-                'rating_distribution' => $this->getRatingDistribution($productId),
-            ];
-
-            // هل قام المستخدم الحالي بتقييم المنتج
-            $userReview = null;
-            if (auth()->check()) {
-                $userReview = Review::where('product_id', $productId)
-                    ->where('user_id', auth()->id())
-                    ->first();
-            }
-
-            return $this->success([
-                'product' => [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'image' => $product->image,
-                ],
-                'stats' => $stats,
-                'user_review' => $userReview ? new ReviewResource($userReview) : null,
-                'reviews' => ReviewResource::collection($reviews),
-                'pagination' => [
-                    'total' => $reviews->total(),
-                    'per_page' => $reviews->perPage(),
-                    'current_page' => $reviews->currentPage(),
-                    'last_page' => $reviews->lastPage(),
-                ],
-            ], 'تم جلب تقييمات المنتج بنجاح');
-        } catch (\Exception $e) {
-            return $this->error('حدث خطأ أثناء جلب تقييمات المنتج', 500, [
-                'exception' => $e->getMessage(),
-            ]);
+        if (!Product::query()->whereKey($productId)->where('status_id', 1)->exists()) {
+            return $this->error('المنتج غير موجود أو غير متاح', 404);
         }
-    }
 
-    /**
-     * 🔹 تحديث متوسط تقييم المنتج
-     */
-    private function updateProductRating($productId)
-    {
-        try {
-            $product = Product::find($productId);
-            if ($product) {
-                // متوسط التقييم محسوب في الموديل من خلال Accessor
-                // يمكنك تحديث حقل cached إذا كان موجوداً
-                // $average = $product->reviews()->avg('rating');
-                // $product->update(['average_rating' => $average]);
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Error updating product rating: ' . $e->getMessage());
-        }
-    }
+        $query = Review::query()->approved()->where('product_id', $productId)->with('user')->latest();
+        $this->applyFilters($query, $request, false);
+        $reviews = $query->paginate(min(max((int) $request->input('per_page', 15), 1), 100))->withQueryString();
 
-    /**
-     * 🔹 الحصول على توزيع التقييمات لمنتج
-     */
-    private function getRatingDistribution($productId)
-    {
+        $statsQuery = Review::query()->approved()->where('product_id', $productId);
+        $total = (clone $statsQuery)->count();
         $distribution = [];
-
-        for ($i = 5; $i >= 1; $i--) {
-            $count = Review::where('product_id', $productId)
-                ->where('rating', $i)
-                ->count();
-
-            $distribution[$i] = [
-                'stars' => $i,
-                'count' => $count,
-                'percentage' => 0, // سيتم حسابها لاحقاً
-            ];
+        foreach (range(1, 5) as $rating) {
+            $count = (clone $statsQuery)->where('rating', $rating)->count();
+            $distribution[$rating] = ['count' => $count, 'percentage' => $total ? round($count * 100 / $total, 1) : 0];
         }
 
-        $total = array_sum(array_column($distribution, 'count'));
+        return $this->success([
+            'reviews' => ReviewResource::collection($reviews->getCollection())->resolve(),
+            'pagination' => $this->pagination($reviews),
+            'stats' => [
+                'average_rating' => round((float) $statsQuery->avg('rating'), 1),
+                'total_reviews' => $total,
+                'rating_distribution' => $distribution,
+            ],
+        ], 'تم جلب تقييمات المنتج بنجاح');
+    }
 
-        if ($total > 0) {
-            foreach ($distribution as $i => $data) {
-                $distribution[$i]['percentage'] = round(($data['count'] / $total) * 100, 1);
-            }
+    private function applyFilters($query, Request $request, bool $allowProduct = true): void
+    {
+        if ($allowProduct && $request->filled('product_id')) $query->where('product_id', $request->integer('product_id'));
+        if ($request->filled('rating')) $query->where('rating', min(max($request->integer('rating'), 1), 5));
+        if ($request->filled('min_rating')) $query->where('rating', '>=', min(max($request->integer('min_rating'), 1), 5));
+        if ($request->filled('max_rating')) $query->where('rating', '<=', min(max($request->integer('max_rating'), 1), 5));
+        if ($request->filled('date_from')) $query->whereDate('created_at', '>=', $request->date_from);
+        if ($request->filled('date_to')) $query->whereDate('created_at', '<=', $request->date_to);
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(fn ($q) => $q->where('comment', 'like', "%{$search}%")
+                ->orWhereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%")));
         }
+    }
 
-        return $distribution;
+    private function cleanText(?string $text): ?string
+    {
+        if ($text === null) return null;
+        return trim(strip_tags($text));
+    }
+
+    private function pagination($paginator): array
+    {
+        return [
+            'total' => $paginator->total(), 'per_page' => $paginator->perPage(),
+            'current_page' => $paginator->currentPage(), 'last_page' => $paginator->lastPage(),
+        ];
     }
 }

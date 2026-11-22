@@ -27,7 +27,7 @@ class PaymentMethodController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'key' => 'required|string|max:255|unique:payment_methods,key',
-            'icon' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'icon' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'icon_class' => ['nullable', 'string', 'max:255', 'regex:/^(fas|far|fab|fal|fad|fa-solid|fa-regular|fa-brands)\s+fa-[a-z0-9-]+$/i'],
             'is_active' => 'boolean',
             'is_payment' => 'boolean',
@@ -36,7 +36,7 @@ class PaymentMethodController extends Controller
 
         // معالجة رفع الصورة
         if ($request->hasFile('icon')) {
-            $fileName = time().'_'.$request->icon->getClientOriginalName();
+            $fileName = (string) \Illuminate\Support\Str::uuid().'.'.strtolower($request->icon->extension());
             $request->icon->storeAs('payment-methods', $fileName, 'public');
             $validated['icon'] = $fileName;
         } elseif ($request->filled('icon_class')) {
@@ -75,7 +75,7 @@ class PaymentMethodController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'key' => 'required|string|max:255|unique:payment_methods,key,'.$paymentMethod->id,
-            'icon' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'icon' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'icon_class' => ['nullable', 'string', 'max:255', 'regex:/^(fas|far|fab|fal|fad|fa-solid|fa-regular|fa-brands)\s+fa-[a-z0-9-]+$/i'],
             'is_active' => 'boolean',
             'is_payment' => 'boolean',
@@ -91,7 +91,7 @@ class PaymentMethodController extends Controller
                 }
 
                 // رفع الصورة الجديدة
-                $fileName = time().'_'.uniqid().'.'.$request->icon->getClientOriginalExtension();
+                $fileName = (string) \Illuminate\Support\Str::uuid().'.'.strtolower($request->icon->extension());
                 $request->icon->storeAs('payment-methods', $fileName, 'public');
                 $validated['icon'] = $fileName;
             } elseif ($request->filled('icon_class')) {
@@ -116,7 +116,7 @@ class PaymentMethodController extends Controller
             return redirect()->route('admin.payment-methods.index')
                 ->with('success', 'تم تحديث وسيلة الدفع بنجاح.');
         } catch (\Exception $e) {
-            Log::error('Error updating payment method: '.$e->getMessage());
+            Log::error('Error updating payment method', ['error_class' => $e::class, 'payment_method_id' => $paymentMethod->id]);
 
             return back()
                 ->withInput()
@@ -158,7 +158,7 @@ class PaymentMethodController extends Controller
                 'is_active' => $paymentMethod->is_active,
             ]);
         } catch (\Exception $e) {
-            Log::error('Error toggling payment method status: '.$e->getMessage());
+            Log::error('Error toggling payment method status', ['error_class' => $e::class, 'payment_method_id' => $paymentMethod->id]);
 
             return response()->json([
                 'success' => false,

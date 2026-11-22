@@ -27,7 +27,8 @@ class SettingsController extends Controller
             'mail_host' => config('mail.mailers.smtp.host'),
             'mail_port' => config('mail.mailers.smtp.port'),
             'mail_username' => config('mail.mailers.smtp.username'),
-            'mail_password' => config('mail.mailers.smtp.password'),
+            'mail_password' => null,
+            'mail_password_configured' => filled(config('mail.mailers.smtp.password')),
             'mail_encryption' => config('mail.mailers.smtp.encryption'),
             'mail_from_address' => config('mail.from.address'),
             'mail_from_name' => config('mail.from.name'),
@@ -73,7 +74,7 @@ class SettingsController extends Controller
 
         // Update database settings
         foreach ($validated as $key => $value) {
-            if ($key !== 'mail_password' || !empty($value)) {
+            if ($key !== 'mail_password') {
                 setting([$key => $value]);
             }
         }
@@ -122,7 +123,7 @@ class SettingsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'فشل إرسال البريد: ' . $e->getMessage()
+                'message' => 'فشل إرسال البريد التجريبي. راجع إعدادات SMTP وسجل الأخطاء.'
             ], 500);
         }
     }
@@ -528,28 +529,20 @@ foreach ($translatedKeys as $tKey) {
         ]);
 
         try {
-            // In a real application, you would have a File model
-            // For now, we'll simulate file deletion
-            $filePath = $request->file_id;
-            
-            if (Storage::disk('public')->exists($filePath)) {
-                Storage::disk('public')->delete($filePath);
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => 'تم حذف الملف بنجاح.'
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'الملف غير موجود.'
-                ], 404);
+            $filePath = ltrim(str_replace('\\', '/', trim((string) $request->file_id)), '/');
+            abort_if($filePath === '' || str_contains($filePath, '..') || str_contains($filePath, "\0"), 422, 'مسار ملف غير صالح.');
+            $allowedPrefixes = ['uploads/', 'settings/', 'logos/', 'favicons/', 'products/', 'categories/', 'banners/', 'payment-methods/'];
+            abort_unless(collect($allowedPrefixes)->contains(fn ($prefix) => str_starts_with($filePath, $prefix)), 403);
+            if (!Storage::disk('public')->exists($filePath)) {
+                return response()->json(['success' => false, 'message' => 'الملف غير موجود.'], 404);
             }
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء حذف الملف: ' . $e->getMessage()
-            ], 500);
+            Storage::disk('public')->delete($filePath);
+            return response()->json(['success' => true, 'message' => 'تم حذف الملف بنجاح.']);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            \Log::warning('Settings file deletion failed', ['error_class' => $e::class]);
+            return response()->json(['success' => false, 'message' => 'حدث خطأ أثناء حذف الملف.'], 500);
         }
     }
 

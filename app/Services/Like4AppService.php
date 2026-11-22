@@ -6,6 +6,7 @@ namespace App\Services;
 use App\Models\OrderLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class Like4AppService
 {
@@ -13,7 +14,9 @@ class Like4AppService
     protected $securityCode;
     protected $email;
     protected $langId;
-    protected $baseUrl = 'https://taxes.like4app.com/online';
+    protected $phone;
+    protected $hashKey;
+    protected $baseUrl;
 
     public function __construct()
     {
@@ -21,6 +24,9 @@ class Like4AppService
         $this->securityCode = config('services.like4app.security_code');
         $this->email = config('services.like4app.email');
         $this->langId = config('services.like4app.lang_id', 1);
+        $this->phone = config('services.like4app.phone');
+        $this->hashKey = config('services.like4app.hash_key');
+        $this->baseUrl = rtrim((string) config('services.like4app.base_url', 'https://taxes.like4app.com/online'), '/');
     }
 
     /**
@@ -57,12 +63,16 @@ class Like4AppService
         $payload = [
             'productId' => (string) $productId,
             'quantity' => (string) $quantity,
-            'referenceId' => $referenceId ?: ('ORDER_' . time()),
+            'referenceId' => $referenceId ?: ('ORDER_' . Str::uuid()->toString()),
         ];
 
         $response = $this->makeRequest('create_order', $payload, 'POST');
 
-        Log::info('Like4App Create Order Response', ['response' => $response]);
+        Log::info('Like4App create-order completed', [
+            'success' => (bool) ($response['success'] ?? false),
+            'status_code' => $response['status_code'] ?? null,
+            'reference_id' => $payload['referenceId'],
+        ]);
 
         return $response;
     }
@@ -77,8 +87,16 @@ class Like4AppService
         $email = strtolower(trim($this->email));
         $time = (string) time();
 
-        $phone = '201007930374';
-        $hashKey = '8Tyr4EDw!2sN';
+        if ($endpoint === 'create_order' && (empty($this->phone) || empty($this->hashKey))) {
+            return [
+                'success' => false,
+                'data' => null,
+                'raw_body' => null,
+                'status_code' => 500,
+                'duration' => 0,
+                'error' => 'Like4App signing credentials are not configured',
+            ];
+        }
 
         $baseParams = [
             'deviceId' => (string) $this->deviceId,
@@ -89,7 +107,7 @@ class Like4AppService
 
         if ($endpoint === 'create_order') {
             $baseParams['time'] = $time;
-            $baseParams['hash'] = hash('sha256', $time . $email . $phone . $hashKey);
+            $baseParams['hash'] = hash('sha256', $time . $email . $this->phone . $this->hashKey);
         }
 
         $params = array_merge($baseParams, $data);
@@ -131,8 +149,8 @@ class Like4AppService
                     'hash' => isset($params['hash']) ? '***hidden***' : null,
                 ]),
                 'response_code' => $response->status(),
-                'response_json' => $jsonBody,
-                'response_body' => $rawBody,
+                'response_json' => $this->redactSensitive($jsonBody),
+                'response_body_length' => strlen($rawBody),
                 'duration_ms' => $duration,
             ]);
 
@@ -205,8 +223,8 @@ class Like4AppService
                 'url' => $url,
                 'page' => $page,
                 'response_code' => $response->status(),
-                'response_json' => $json,
-                'response_body' => $response->body(),
+                'response_json' => $this->redactSensitive($json),
+                'response_body_length' => strlen($response->body()),
             ]);
 
             if (!$response->successful()) {
@@ -261,6 +279,33 @@ class Like4AppService
             ];
         }
     }
+    /**
+     * Remove voucher/serial secrets before writing provider payloads to logs.
+     */
+    public function redactSensitive($value)
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $sensitiveKeys = [
+            'serialcode', 'serial_code', 'serialnumber', 'serial_number', 'voucher',
+            'voucher_code', 'pin', 'password', 'securitycode', 'hash', 'token',
+        ];
+
+        $result = [];
+        foreach ($value as $key => $item) {
+            $normalized = strtolower((string) $key);
+            if (in_array($normalized, $sensitiveKeys, true)) {
+                $result[$key] = '[REDACTED]';
+                continue;
+            }
+            $result[$key] = is_array($item) ? $this->redactSensitive($item) : $item;
+        }
+
+        return $result;
+    }
+
     /**
      * Parse Like4App response and extract serial codes
      */

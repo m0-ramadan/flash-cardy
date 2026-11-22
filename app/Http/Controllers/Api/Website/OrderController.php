@@ -16,6 +16,11 @@ use App\Models\OrderItem;
 use App\Models\PaymentMethod;
 use App\Models\PaymentTransaction;
 use App\Services\Payment\CompletePaidOrderService;
+use App\Services\Payment\PaymobWebhookService;
+use App\Services\Orders\OrderCreationService;
+use App\Services\Orders\OrderLifecycleService;
+use App\Services\Coupons\CouponReservationService;
+use App\Services\Inventory\InventoryService;
 use App\Services\Payment\NowPaymentsService;
 use App\Services\Wallet\ExchangeRateService;
 use App\Support\PaymentLogger;
@@ -55,177 +60,41 @@ class OrderController extends Controller
     /**
      * إنشاء طلب جديد من السلة
      */
-    public function store(CreateOrderRequest $request)
+    public function store(CreateOrderRequest $request, OrderCreationService $creator)
     {
-        $user = auth('sanctum')->user();
-        $cart = $this->getCurrentCart();
-
-        if ($cart->items()->count() === 0) {
-            return $this->errorResponse('السلة فارغة، لا يمكن إنشاء طلب', 400);
-        }
-
         $paymentMethod = PaymentMethod::query()
             ->whereKey($request->integer('payment_method'))
-            ->where('is_active', true)
-            ->where('is_payment', true)
-            ->first();
-
-        if (! $paymentMethod) {
-            return $this->errorResponse('طريقة الدفع غير متاحة', 422);
+            ->where('is_active', true)->where('is_payment', true)->first();
+        if (!$paymentMethod) return $this->errorResponse('طريقة الدفع غير متاحة', 422);
+        try {
+            [$order, $paymentTransaction] = $creator->create($request, $paymentMethod);
+        } catch (\Throwable $e) {
+            PaymentLogger::warning('Order creation rejected', ['user_id'=>$request->user()?->id,'error_class'=>$e::class]);
+            return $this->errorResponse($e instanceof \Illuminate\Validation\ValidationException ? $e->errors() : $e->getMessage(), 422);
         }
-
-        $coupon = null;
-        $discountAmount = 0;
-        $imagePath = null;
-
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('orders', 'public');
-        }
-
-        if ($request->filled('coupon_code')) {
-            $coupon = Coupon::where('code', strtoupper($request->coupon_code))->first();
-
-            if (! $coupon || ! $coupon->isValidForOrder($cart->total, $user?->id, $cart->session_id ?: session()->getId())) {
-                return $this->errorResponse('كوبون الخصم غير صالح أو منتهي الصلاحية', 400);
-            }
-
-            $discountAmount = $coupon->calculateDiscount($cart->total);
-        }
-
-        [$order, $paymentTransaction] = DB::transaction(function () use ($request, $user, $cart, $coupon, $discountAmount, $imagePath, $paymentMethod) {
-            $order = Order::create([
-                'user_id' => $user?->id,
-                'cart_id' => $cart->id,
-                'session_id' => $cart->session_id,
-                'order_number' => $this->generateUniqueOrderNumber(),
-                'customer_name' => $request->customer_name ?? $user?->name,
-                'customer_phone' => $request->customer_phone ?? $user?->phone,
-                'customer_email' => $request->customer_email ?? $user?->email,
-                'subtotal' => $cart->subtotal,
-                'shipping_amount' => 0,
-                'discount_amount' => $discountAmount,
-                'tax_amount' => 0,
-                'total_amount' => $cart->total - $discountAmount,
-                'payment_method' => $request->payment_method,
-                'status' => 'pending',
-                'status_payment' => 'pending',
-                'notes' => $request->notes,
-                'coupon_id' => $coupon?->id,
-                'image' => $imagePath,
-            ]);
-
-            // نقل العناصر من السلة إلى الطلب
-            foreach ($cart->items as $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item->product_id,
-                    // 'size_id'               => $item->size_id,
-                    // 'color_id'              => $item->color_id,
-                    // 'printing_method_id'    => $item->printing_method_id,
-                    // 'print_locations'       => $item->print_locations,
-                    // 'embroider_locations'   => $item->embroider_locations,
-                    // 'selected_options'      => $item->selected_options,
-                    // 'design_service_id'     => $item->design_service_id,
-                    'quantity' => $item->quantity,
-                    'price_per_unit' => $item->price_per_unit,
-                    'total_price' => $item->line_total ?? $item->price_per_unit * $item->quantity,
-                    'is_sample' => $item->is_sample,
-                    'note' => $item->note,
-                    'quantity_id' => $item->quantity_id,
-                    // 'image_design'          => $item->image_design,
-                ]);
-            }
-
-            $paymentTransaction = null;
-
-            if ($paymentMethod->key === 'nowpayments') {
-                $nowPayments = app(NowPaymentsService::class);
-
-                $paymentTransaction = PaymentTransaction::create([
-                    'order_id' => $order->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'gateway' => 'nowpayments',
-                    'status' => 'initiating',
-                    'original_amount' => $order->total_amount,
-                    'original_currency' => $this->nowPaymentsStoreCurrency($nowPayments),
-                    'is_fixed_rate' => $nowPayments->isFixedRate(),
-                    'is_fee_paid_by_user' => $nowPayments->isFeePaidByUser(),
-                    'metadata' => [
-                        'requested_pay_currency' => $request->input('pay_currency'),
-                    ],
-                ]);
-            }
-
-            return [$order, $paymentTransaction];
-        });
-
         if ($paymentMethod->key === 'paymob') {
-            $payment = $this->initiatePaymobPayment($order);
-            $payment = $payment instanceof JsonResponse
-                ? ($payment->getData(true) ?: [])
-                : $payment;
-
-            if (! is_array($payment) || empty($payment['success'])) {
-                return $this->errorResponse([$payment['message'] ?? 'فشل إنشاء عملية الدفع'], 400);
+            $payment = $this->initiatePaymobPayment($order, $paymentTransaction);
+            if (empty($payment['success'])) {
+                $paymentTransaction->forceFill(['status'=>'failed','failure_reason'=>$payment['message']??'Paymob initiation failed','failed_at'=>now()])->save();
+                app(InventoryService::class)->releaseOrder($order,'paymob_initiation_failed'); app(\App\Services\Fulfillment\LocalSerialFulfillmentService::class)->releaseOrder($order,'paymob_initiation_failed'); app(CouponReservationService::class)->release($order);
+                return $this->errorResponse('تعذر إنشاء عملية الدفع عبر Paymob حاليًا', 422);
             }
-
-            return $this->successResponse([
-                'payment_url' => $payment['payment_url'],
-                'shorten_url' => $payment['shorten_url'] ?? null,
-                'client_secret' => $payment['client_secret'] ?? null,
-                'intention_id' => $payment['intention_id'] ?? null,
-                'order_number' => $order->order_number,
-                'payment' => [
-                    'gateway' => 'paymob',
-                    'payment_type' => 'redirect',
-                    'payment_url' => $payment['payment_url'],
-                    'shorten_url' => $payment['shorten_url'] ?? null,
-                    'client_secret' => $payment['client_secret'] ?? null,
-                    'intention_id' => $payment['intention_id'] ?? null,
-                ],
-                'message' => 'جاري توجيهك إلى بوابة الدفع الآمنة...',
-            ]);
+            return $this->successResponse(['payment_url'=>$payment['payment_url'],'shorten_url'=>null,'client_secret'=>$payment['client_secret']??null,'intention_id'=>$payment['intention_id']??null,'order_number'=>$order->order_number,'payment'=>['gateway'=>'paymob','payment_type'=>'redirect','payment_url'=>$payment['payment_url'],'client_secret'=>$payment['client_secret']??null,'intention_id'=>$payment['intention_id']??null]],'جاري توجيهك إلى بوابة الدفع الآمنة...',201);
         }
-
-        if ($paymentMethod->key === 'nowpayments') {
-            return $this->initiateNowPaymentsPayment($request, $order, $paymentTransaction);
-        }
-
-        return $this->successResponse(
-            new OrderDetailsResource($order->load(['items.product'])),
-            'تم إنشاء الطلب بنجاح',
-            201
-        );
+        if ($paymentMethod->key === 'nowpayments') return $this->initiateNowPaymentsPayment($request,$order,$paymentTransaction);
+        $paymentTransaction->forceFill(['status'=>'pending','provider_status'=>'awaiting_manual_payment'])->save();
+        return $this->successResponse(new OrderDetailsResource($order->load(['items.product'])), 'تم إنشاء الطلب بنجاح', 201);
     }
 
     /**
      * إلغاء الطلب (فقط إذا كان pending أو processing)
      */
-    public function cancelled($codeOrder)
+    public function cancelled($codeOrder, Request $request, OrderLifecycleService $lifecycle)
     {
-        $order = Order::where('order_number', $codeOrder)->firstOrFail();
-
-        $user = auth('sanctum')->user();
-
-        // تحقق من الصلاحية
-        if ($user && $order->user_id !== $user->id) {
-            return $this->errorResponse('غير مصرح لك بإلغاء هذا الطلب', 403);
-        }
-
-        if (! $user && ! $this->guestCanAccessOrder($order)) {
-            return $this->errorResponse('رقم الهاتف مطلوب لإلغاء الطلب', 403);
-        }
-
-        if (! in_array($order->status, ['pending', 'processing'])) {
-            return $this->errorResponse('لا يمكن إلغاء الطلب في هذه الحالة', 400);
-        }
-
-        $order->update(['status' => 'cancelled']);
-
-        return $this->successResponse(
-            new OrderDetailsResource($order),
-            'تم إلغاء الطلب بنجاح'
-        );
+        $order = Order::where('order_number',$codeOrder)->where('user_id',$request->user()->id)->firstOrFail();
+        try { $order = $lifecycle->transition($order,'cancelled',null,'customer_cancelled'); app(CouponReservationService::class)->release($order); }
+        catch (\Throwable $e) { return $this->errorResponse($e->getMessage(), 422); }
+        return $this->successResponse(new OrderDetailsResource($order),'تم إلغاء الطلب بنجاح');
     }
 
     /**
@@ -233,29 +102,8 @@ class OrderController extends Controller
      */
     public function traceOrder($codeOrder, Request $request)
     {
-        $order = Order::with(['items.product'])
-            ->where('order_number', $codeOrder)
-            ->firstOrFail();
-
-        $user = auth('sanctum')->user();
-
-        // لو مسجل دخول → تأكد إنه صاحب الطلب
-        // if ($user && $order->user_id !== $user->id) {
-        //     return $this->errorResponse('هذا الطلب ليس لك', 403);
-        // }
-
-        // لو زائر → يطلب رقم التليفون
-        // if (!$user) {
-        //     $phone = $request->input('phone');
-        //     if (!$phone || $order->customer_phone !== $phone) {
-        //         return $this->errorResponse('رقم الهاتف غير صحيح', 403);
-        //     }
-        // }
-
-        return $this->successResponse(
-            new OrderDetailsResource($order),
-            'تم جلب تفاصيل الطلب'
-        );
+        $order = Order::with(['items.product'])->where('order_number',$codeOrder)->where('user_id',$request->user()->id)->firstOrFail();
+        return $this->successResponse(new OrderDetailsResource($order),'تم جلب تفاصيل الطلب');
     }
 
     /**
@@ -312,113 +160,27 @@ class OrderController extends Controller
         );
     }
 
-    public function webhook(Request $request)
+    public function webhook(Request $request, PaymobWebhookService $webhooks)
     {
-        $hmacSecret = config('services.paymob.hmac_secret');
-
-        $receivedHmac = $request->header('X-Paymob-Hmac-Signature')
-            ?? $request->input('hmac');
-
-        if (! $receivedHmac || empty($hmacSecret)) {
-            return response('Unauthorized', 401);
-        }
-
-        $obj = $request->input('obj');
-        $concatenated = collect($obj)->flatten()->implode('');
-        $calculatedHmac = hash_hmac('sha512', $concatenated, $hmacSecret);
-
-        if (! hash_equals($calculatedHmac, $receivedHmac)) {
-            \Illuminate\Support\Facades\Log::warning('PayMob Webhook HMAC Invalid', ['ip' => $request->ip()]);
-
-            return response('Invalid HMAC', 400);
-        }
-
-        if ($request->input('type') === 'TRANSACTION' && ($obj['success'] ?? false) && ($obj['is_capture'] ?? true)) {
-            $orderNumber = $obj['merchant_reference']
-                ?? $obj['order']['merchant_order_id']
-                ?? $obj['order']['special_reference']
-                ?? $obj['payment_key_claims']['extra']['order_number']
-                ?? $obj['payment_key_claims']['extra']['order_id']
-                ?? null;
-
-            if (! $orderNumber) {
-                return response('No reference', 400);
-            }
-
-            $order = Order::where('order_number', $orderNumber)->first();
-
-            if ($order && $order->status === 'pending') {
-                $order->update(['transaction_id' => $obj['id']]);
-                app(CompletePaidOrderService::class)->complete($order);
-
-                PaymentLogger::info("Order Paid via PayMob: {$orderNumber}");
-            }
-        }
-
-        return response('OK', 200);
+        $received = $request->header('X-Paymob-Hmac-Signature') ?? $request->query('hmac') ?? $request->input('hmac');
+        if (!$webhooks->verify($request->all(), $received)) { PaymentLogger::warning('Invalid Paymob webhook HMAC',['ip'=>$request->ip()]); return response('Invalid HMAC',401); }
+        try { $webhooks->process($request->all()); } catch (\Throwable $e) { PaymentLogger::warning('Paymob webhook processing failed',['error_class'=>$e::class]); return response('Processing error',500); }
+        return response('OK',200);
     }
 
     public function paymentMethods(Request $request)
     {
-
-        $isPayment = filter_var(
-            $request->input('is_payment'),
-            FILTER_VALIDATE_BOOLEAN,
-            FILTER_NULL_ON_FAILURE
-        );
-
-        $paymentMethods = PaymentMethod::query()
-            ->where('is_active', true)
-            ->where('is_payment', $isPayment)
-            ->get();
-
-        return $this->successResponse(
-            PaymentMethodResource::collection($paymentMethods),
-            'تم جلب طرق الدفع بنجاح'
-        );
+        $query=PaymentMethod::query()->where('is_active',true);
+        if ($request->has('is_payment')) { $value=filter_var($request->input('is_payment'),FILTER_VALIDATE_BOOLEAN,FILTER_NULL_ON_FAILURE); if($value!==null)$query->where('is_payment',$value); }
+        return $this->successResponse(PaymentMethodResource::collection($query->orderBy('id')->get()),'تم جلب طرق الدفع بنجاح');
     }
 
     public function paymentStatus(Request $request)
     {
-        $orderId = $request->query('orderId');
-
-        if (! $orderId) {
-            return $this->errorResponse('بيانات غير مكتملة', 400);
-        }
-
-        $order = Order::where('order_number', $orderId)
-            ->orWhere('id', $orderId)
-            ->first();
-
-        if (! $order) {
-            return $this->errorResponse('الطلب غير موجود', 404);
-        }
-
-        $user = auth('sanctum')->user();
-
-        if ($user && $order->user_id && $order->user_id !== $user->id) {
-            return $this->errorResponse('غير مصرح لك بعرض حالة هذا الطلب', 403);
-        }
-
-        $payment = $order->latestPaymentTransaction;
-
-        return $this->successResponse([
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'order_status' => $order->status,
-            'payment_status' => $order->status_payment,
-            'gateway' => $payment?->gateway,
-            'payment_id' => $payment?->provider_payment_id,
-            'payment_url' => $payment?->metadata['invoice_url'] ?? null,
-            'invoice_url' => $payment?->metadata['invoice_url'] ?? null,
-            'pay_currency' => $payment?->pay_currency,
-            'pay_amount' => $payment?->pay_amount,
-            'actually_paid' => $payment?->actually_paid,
-            'requires_manual_review' => (bool) ($payment?->requires_manual_review ?? false),
-            'paid_at' => $order->paid_at?->toIso8601String(),
-            'expires_at' => $payment?->expires_at?->toIso8601String(),
-            'total' => $order->total_amount,
-        ], 'تم جلب حالة الدفع');
+        $orderId=$request->query('orderId'); if(!$orderId)return $this->errorResponse('بيانات غير مكتملة',400);
+        $query=Order::where('user_id',$request->user()->id); $order=is_numeric($orderId)?(clone $query)->whereKey((int)$orderId)->first():(clone $query)->where('order_number',$orderId)->first();
+        if(!$order)return $this->errorResponse('الطلب غير موجود',404); $payment=$order->latestPaymentTransaction;
+        return $this->successResponse(['order_id'=>$order->id,'order_number'=>$order->order_number,'order_status'=>$order->order_state?:$order->status,'payment_status'=>$order->payment_state?:$order->status_payment,'fulfillment_status'=>$order->fulfillment_status,'gateway'=>$payment?->gateway,'payment_id'=>$payment?->provider_transaction_id?:$payment?->provider_payment_id,'payment_url'=>$payment?->metadata['invoice_url']??$payment?->metadata['payment_url']??null,'pay_currency'=>$payment?->pay_currency,'pay_amount'=>$payment?->pay_amount,'actually_paid'=>$payment?->actually_paid,'requires_manual_review'=>(bool)($payment?->requires_manual_review??false),'paid_at'=>$order->paid_at?->toIso8601String(),'expires_at'=>$payment?->expires_at?->toIso8601String(),'total'=>$order->total_amount,'currency'=>$order->currency?:config('commerce.base_currency','EGP')],'تم جلب حالة الدفع');
     }
 
     private function initiateNowPaymentsPayment(Request $request, Order $order, ?PaymentTransaction $paymentTransaction)

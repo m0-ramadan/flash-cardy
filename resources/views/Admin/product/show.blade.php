@@ -4,26 +4,6 @@
 
 @section('css')
     <style>
-        :root {
-            --primary-color: #696cff;
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --dark-bg: #1e1e2d;
-            --dark-card: #2b3b4c;
-        }
-
-        body {
-            font-family: "Cairo", sans-serif !important;
-            background: var(--dark-bg);
-            color: #fff;
-        }
-
-        .product-detail-card {
-            background: var(--dark-card);
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
         .product-image {
             width: 100%;
             max-height: 400px;
@@ -45,73 +25,48 @@
             border-radius: 8px;
             cursor: pointer;
             transition: transform 0.3s;
-            border: 2px solid transparent;
+            border: 2px solid #e9ecef;
         }
 
         .additional-image:hover {
             transform: scale(1.05);
-            border-color: var(--primary-color);
+            border-color: #696cff;
         }
 
         .info-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: #f8f9fa;
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid #dee2e6;
         }
 
         .info-label {
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.7);
+            color: #6c757d;
             margin-bottom: 5px;
             font-size: 13px;
         }
 
         .info-value {
-            color: #fff;
+            color: #212529;
             margin-bottom: 15px;
             font-size: 16px;
         }
 
         .tag-badge {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
+            background: #e7e7ff;
+            color: #696cff;
             padding: 5px 12px;
             border-radius: 20px;
             margin-right: 5px;
             margin-bottom: 5px;
             display: inline-block;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .status-badge {
-            padding: 6px 15px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-active {
-            background: rgba(21, 87, 36, 0.2);
-            color: #20c997;
-            border: 1px solid rgba(32, 201, 151, 0.3);
-        }
-
-        .status-inactive {
-            background: rgba(133, 100, 4, 0.2);
-            color: #ffc107;
-            border: 1px solid rgba(255, 193, 7, 0.3);
-        }
-
-        .status-draft {
-            background: rgba(56, 61, 65, 0.2);
-            color: #adb5bd;
-            border: 1px solid rgba(173, 181, 189, 0.3);
+            border: 1px solid #d4d4ff;
         }
 
         .price-box {
-            background: var(--primary-gradient);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 25px;
             border-radius: 15px;
@@ -131,17 +86,17 @@
         }
 
         .discount-badge {
-            background: rgba(220, 53, 69, 0.3);
-            color: #ff6b6b;
+            background: rgba(220, 53, 69, 0.2);
+            color: #fff;
             padding: 5px 15px;
             border-radius: 25px;
             font-size: 14px;
             display: inline-block;
-            border: 1px solid rgba(220, 53, 69, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
         .language-tabs {
-            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 2px solid #dee2e6;
             margin-bottom: 20px;
             display: flex;
             gap: 5px;
@@ -152,7 +107,7 @@
             padding: 10px 20px;
             border: none;
             background: none;
-            color: rgba(255, 255, 255, 0.7);
+            color: #6c757d;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
@@ -160,14 +115,14 @@
         }
 
         .language-tab.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
+            color: #696cff;
+            border-bottom-color: #696cff;
             background: rgba(105, 108, 255, 0.1);
         }
 
         .language-tab:hover:not(.active) {
-            color: #fff;
-            border-bottom-color: rgba(255, 255, 255, 0.3);
+            color: #212529;
+            border-bottom-color: #adb5bd;
         }
 
         .language-content {
@@ -177,128 +132,18 @@
         .language-content.active {
             display: block;
         }
-
-        .text-ads-container {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-
-        .text-ad-item {
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-right: 4px solid var(--primary-color);
-            color: #fff;
-        }
-
-        .image-gallery-item {
-            position: relative;
-            margin-bottom: 15px;
-        }
-
-        .image-gallery-item img {
-            width: 100%;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 8px;
-        }
-
-        .primary-badge {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            background: var(--primary-gradient);
-            color: white;
-            padding: 3px 8px;
-            border-radius: 5px;
-            font-size: 11px;
-        }
-
-        .review-item {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 10px;
-        }
-
-        .star-rating {
-            color: #ffc107;
-        }
-
-        .breadcrumb {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px 15px;
-            border-radius: 8px;
-        }
-
-        .breadcrumb-item a {
-            color: rgba(255, 255, 255, 0.8);
-            text-decoration: none;
-        }
-
-        .breadcrumb-item.active {
-            color: var(--primary-color);
-        }
-
-        .btn-primary {
-            background: var(--primary-gradient);
-            border: none;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #5a6fd8 0%, #6a4a9a 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(105, 108, 255, 0.4);
-        }
-
-        .btn-outline-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
-        .btn-outline-secondary:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-
-        .alert {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #fff;
-        }
-
-        .alert-success {
-            background: rgba(21, 87, 36, 0.2);
-            border-color: rgba(32, 201, 151, 0.3);
-            color: #20c997;
-        }
-
-        .alert-danger {
-            background: rgba(133, 100, 4, 0.2);
-            border-color: rgba(255, 193, 7, 0.3);
-            color: #ffc107;
-        }
     </style>
 @endsection
 
 @section('content')
     <div class="container-xxl flex-grow-1 container-p-y">
         <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
+            <ol class="breadcrumb mb-4">
                 <li class="breadcrumb-item">
-                    <a href="{{ route('admin.index') }}">
-                        <i class="fas fa-home me-1"></i>الرئيسية
-                    </a>
+                    <a href="{{ route('admin.index') }}">الرئيسية</a>
                 </li>
                 <li class="breadcrumb-item">
-                    <a href="{{ route('admin.products.index') }}">
-                        <i class="fas fa-box me-1"></i>المنتجات
-                    </a>
+                    <a href="{{ route('admin.products.index') }}">المنتجات</a>
                 </li>
                 <li class="breadcrumb-item active">تفاصيل المنتج</li>
             </ol>
@@ -306,19 +151,18 @@
 
         <div class="row">
             <div class="col-12">
-                <div class="product-detail-card">
-                    <div class="card-header d-flex justify-content-between align-items-center"
-                        style="background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <h5 class="mb-0 text-white">
-                            <i class="fas fa-box-open me-2"></i>
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header border-bottom d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="ti ti-package me-2"></i>
                             تفاصيل المنتج: {{ $product->getTranslatedValue('name', 'ar') }}
                         </h5>
                         <div class="d-flex gap-2">
                             <a href="{{ route('admin.products.edit', $product->id) }}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-edit me-1"></i> تعديل
+                                <i class="ti ti-edit me-1"></i> تعديل
                             </a>
                             <a href="{{ route('admin.products.index') }}" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-arrow-right me-1"></i> رجوع
+                                <i class="ti ti-arrow-right me-1"></i> رجوع
                             </a>
                         </div>
                     </div>
@@ -408,7 +252,7 @@
 
                                     <!-- المحتوى العربي -->
                                     <div class="language-content active" data-lang="ar">
-                                        <h4 class="mb-3 text-white">{{ $product->getTranslatedValue('name', 'ar') }}</h4>
+                                        <h4 class="mb-3 text-dark">{{ $product->getTranslatedValue('name', 'ar') }}</h4>
 
                                         @if ($product->getTranslatedValue('description', 'ar'))
                                             <div class="mb-4">
@@ -440,7 +284,7 @@
                                     @foreach ($languages as $language)
                                         @if ($language->code != 'ar')
                                             <div class="language-content" data-lang="{{ $language->code }}">
-                                                <h4 class="mb-3 text-white">
+                                                <h4 class="mb-3 text-dark">
                                                     {{ $product->getTranslatedValue('name', $language->code) ?: 'لا يوجد اسم' }}
                                                 </h4>
 
@@ -499,6 +343,404 @@
                                             <div class="final-price">{{ number_format($product->price, 2) }} ج.م</div>
                                         @endif
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="info-card">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                                        <h6 class="info-label mb-0"><i class="fas fa-key me-2"></i>بيانات الاشتراك
+                                            والتنفيذ الرقمي</h6>
+                                        <div class="d-flex gap-2">
+                                            <a class="btn btn-sm btn-outline-primary" href="#product-serials-section"><i
+                                                    class="fas fa-barcode me-1"></i>عرض الأكواد
+                                                ({{ number_format($serialStats['total'] ?? 0) }})</a>
+                                            <a class="btn btn-sm btn-outline-info"
+                                                href="{{ route('admin.products.serials.index', $product) }}"><i
+                                                    class="fas fa-cog me-1"></i>إدارة الأكواد</a>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">النوع</small><strong>{{ $product->type ?: 'product' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">البراند</small><strong>{{ $product->brand ?: '—' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">المنطقة</small><strong>{{ $product->region ?: '—' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">القيمة/الفئة</small><strong>{{ $product->denomination ?: '—' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">مصدر
+                                                التنفيذ</small><strong>{{ $product->fulfillment_source ?: 'none' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">طريقة
+                                                الإرسال</small><strong>{{ $product->fulfillment_mode === 'automatic' ? 'تلقائي' : 'يدوي' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">أكواد متاحة</small><strong
+                                                class="text-success">{{ number_format($serialStats['available'] ?? 0) }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">إجمالي
+                                                الأكواد</small><strong>{{ number_format($serialStats['total'] ?? 0) }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">Provider
+                                                ID</small><strong>{{ $product->external_id ?: '—' }}</strong></div>
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">الصلاحية</small><strong>{{ $product->validity_text ?: 'حسب الكود' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small
+                                                class="text-muted d-block">مميز</small><strong>{{ $product->is_featured ? 'نعم' : 'لا' }}</strong>
+                                        </div>
+                                        <div class="col-md-2"><small class="text-muted d-block">الأكثر
+                                                مبيعاً</small><strong>{{ $product->is_best_seller ? 'نعم' : 'لا' }}</strong>
+                                        </div>
+                                    </div>
+                                    @if ($product->instructions || $product->terms)
+                                        <hr>
+                                        <div class="row">
+                                            <div class="col-md-6"><small class="text-muted d-block">تعليمات
+                                                    الاستخدام</small>
+                                                <div>{{ $product->instructions ?: '—' }}</div>
+                                            </div>
+                                            <div class="col-md-6"><small class="text-muted d-block">الشروط</small>
+                                                <div>{{ $product->terms ?: '—' }}</div>
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- بطاقة الأكواد والبطاقات الرقمية للمنتج -->
+                        <div class="row mt-4" id="product-serials-section">
+                            <div class="col-12">
+                                <div class="info-card">
+                                    <!-- الهيدر وأزرار الإجراءات -->
+                                    <div
+                                        class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-3 border-bottom border-secondary border-opacity-25 gap-2">
+                                        <div>
+                                            <h5 class="mb-1 text-dark fw-bold">
+                                                <i class="fas fa-barcode text-primary me-2"></i>الأكواد والبطاقات الرقمية
+                                                الخاصة بالمنتج
+                                            </h5>
+                                            <small class="text-muted">عرض وتتبع جميع الأكواد التسلسلية (Serials / PINs)
+                                                وحالتها وتفاصيل استهلاكها</small>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                                data-bs-target="#addSingleSerialModal">
+                                                <i class="fas fa-plus me-1"></i>إضافة كود مفرد
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                                                data-bs-target="#addBulkSerialsModal">
+                                                <i class="fas fa-file-import me-1"></i>إضافة أكواد متعددة (Bulk)
+                                            </button>
+                                            <a href="{{ route('admin.products.serials.index', $product) }}"
+                                                class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-external-link-alt me-1"></i>إدارة الأكواد المتقدمة
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <!-- إحصائيات الأكواد سريعة -->
+                                    <div class="row g-2 mb-4">
+                                        <div class="col-6 col-md-2">
+                                            <div class="p-2 rounded text-center"
+                                                style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+                                                <small class="text-muted d-block">إجمالي الأكواد</small>
+                                                <h4 class="mb-0 text-dark fw-bold">
+                                                    {{ number_format($serialStats['total'] ?? 0) }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-2">
+                                            <div class="p-2 rounded text-center"
+                                                style="background: rgba(40, 167, 69, 0.15); border: 1px solid rgba(40, 167, 69, 0.3);">
+                                                <small class="text-success d-block fw-semibold">أكواد متاحة للبيع</small>
+                                                <h4 class="mb-0 text-success fw-bold">
+                                                    {{ number_format($serialStats['available'] ?? 0) }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-2">
+                                            <div class="p-2 rounded text-center"
+                                                style="background: rgba(13, 110, 253, 0.15); border: 1px solid rgba(13, 110, 253, 0.3);">
+                                                <small class="text-info d-block fw-semibold">مباعة / مسلمة للعملاء</small>
+                                                <h4 class="mb-0 text-info fw-bold">
+                                                    {{ number_format($serialStats['assigned'] ?? 0) }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-2">
+                                            <div class="p-2 rounded text-center"
+                                                style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.3);">
+                                                <small class="text-danger d-block fw-semibold">منتهية الصلاحية</small>
+                                                <h4 class="mb-0 text-danger fw-bold">
+                                                    {{ number_format($serialStats['expired'] ?? 0) }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-2">
+                                            <div class="p-2 rounded text-center"
+                                                style="background: rgba(108, 117, 125, 0.15); border: 1px solid rgba(108, 117, 125, 0.3);">
+                                                <small class="text-secondary d-block fw-semibold">معطلة</small>
+                                                <h4 class="mb-0 text-secondary fw-bold">
+                                                    {{ number_format($serialStats['disabled'] ?? 0) }}</h4>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- أدوات التصفية والبحث السريع -->
+                                    <form method="GET"
+                                        action="{{ route('admin.products.show', $product->id) }}#product-serials-section"
+                                        class="row g-2 mb-3 align-items-center">
+                                        <div class="col-md-4">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-light"><i
+                                                        class="fas fa-search"></i></span>
+                                                <input type="text" name="serial_search"
+                                                    value="{{ request('serial_search') }}"
+                                                    class="form-control form-control-sm form-control-sm"
+                                                    placeholder="ابحث برقم الكود، PIN، الدفعة، رقم الطلب، أو ملاحظة...">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select name="serial_status"
+                                                class="form-select form-select-sm form-control-sm">
+                                                <option value="">-- تصفية حسب الحالة (الكل) --</option>
+                                                <option value="available" @selected(request('serial_status') === 'available')>متاح فقط</option>
+                                                <option value="delivered" @selected(request('serial_status') === 'delivered')>تم التسليم</option>
+                                                <option value="assigned" @selected(request('serial_status') === 'assigned')>محجوز للطلب</option>
+                                                <option value="expired" @selected(request('serial_status') === 'expired')>منتهي الصلاحية
+                                                </option>
+                                                <option value="disabled" @selected(request('serial_status') === 'disabled')>معطل</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <select name="serial_expires"
+                                                class="form-select form-select-sm form-control-sm">
+                                                <option value="">-- تصفية الصلاحية --</option>
+                                                <option value="soon" @selected(request('serial_expires') === 'soon')>ينتهي قريباً (خلال 30
+                                                    يوم)</option>
+                                                <option value="expired" @selected(request('serial_expires') === 'expired')>منتهي فعلياً</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2 d-flex gap-1">
+                                            <button type="submit" class="btn btn-sm btn-primary w-100"><i
+                                                    class="fas fa-filter me-1"></i>تصفية</button>
+                                            @if (request()->filled('serial_search') || request()->filled('serial_status') || request()->filled('serial_expires'))
+                                                <a href="{{ route('admin.products.show', $product->id) }}#product-serials-section"
+                                                    class="btn btn-sm btn-outline-secondary" title="إعادة تعيين"><i
+                                                        class="fas fa-undo"></i></a>
+                                            @endif
+                                        </div>
+                                    </form>
+
+                                    <!-- جدول الأكواد وتفاصيلها -->
+                                    <div class="table-responsive rounded border border-secondary border-opacity-25">
+                                        <table class="table table-hover align-middle mb-0"
+                                            style="background: transparent;">
+                                            <thead
+                                                style="background: rgba(0,0,0,0.3); color: rgba(255,255,255,0.8); font-size: 13px;">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>الكود الرقمي (Code)</th>
+                                                    <th>الرقم السري (PIN)</th>
+                                                    <th>الحالة</th>
+                                                    <th>الصلاحية</th>
+                                                    <th>الطلب المرتبط</th>
+                                                    <th>تاريخ الاستهلاك</th>
+                                                    <th>الدفعة / المصدر</th>
+                                                    <th>ملاحظات</th>
+                                                    <th>تاريخ الإضافة</th>
+                                                    <th class="text-center">إجراءات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody style="font-size: 13px;">
+                                                @forelse($serials as $serial)
+                                                    <tr>
+                                                        <td><span class="text-muted">#{{ $serial->id }}</span></td>
+                                                        <td dir="ltr" class="text-start">
+                                                            <div class="d-flex align-items-center gap-1">
+                                                                <code
+                                                                    class="serial-code font-monospace fw-bold text-info fs-6"
+                                                                    id="serial-code-{{ $serial->id }}"
+                                                                    data-masked="{{ $serial->masked_code }}"
+                                                                    data-full="{{ $serial->code }}">{{ $serial->masked_code }}</code>
+                                                                <button type="button"
+                                                                    class="btn btn-sm btn-outline-info py-0 px-1 toggle-code-btn"
+                                                                    data-target="#serial-code-{{ $serial->id }}"
+                                                                    title="إظهار / إخفاء الكود">
+                                                                    <i class="fas fa-eye"></i>
+                                                                </button>
+                                                                <button type="button"
+                                                                    class="btn btn-sm btn-outline-secondary py-0 px-1 copy-text-btn"
+                                                                    data-clipboard-text="{{ $serial->code }}"
+                                                                    title="نسخ الكود">
+                                                                    <i class="fas fa-copy"></i>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td dir="ltr" class="text-start">
+                                                            @if ($serial->pin)
+                                                                <div class="d-flex align-items-center gap-1">
+                                                                    <code
+                                                                        class="text-warning fw-bold font-monospace">{{ $serial->pin }}</code>
+                                                                    <button type="button"
+                                                                        class="btn btn-sm btn-outline-secondary py-0 px-1 copy-text-btn"
+                                                                        data-clipboard-text="{{ $serial->pin }}"
+                                                                        title="نسخ PIN">
+                                                                        <i class="fas fa-copy"></i>
+                                                                    </button>
+                                                                </div>
+                                                            @else
+                                                                <span class="text-muted">—</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->status === 'available')
+                                                                <span class="badge bg-success"><i
+                                                                        class="fas fa-check-circle me-1"></i>متاح</span>
+                                                            @elseif($serial->status === 'delivered')
+                                                                <span class="badge bg-primary"><i
+                                                                        class="fas fa-paper-plane me-1"></i>تم
+                                                                    التسليم</span>
+                                                            @elseif($serial->status === 'assigned')
+                                                                <span class="badge bg-warning text-dark"><i
+                                                                        class="fas fa-clock me-1"></i>محجوز</span>
+                                                            @elseif($serial->status === 'expired')
+                                                                <span class="badge bg-danger"><i
+                                                                        class="fas fa-calendar-times me-1"></i>منتهي</span>
+                                                            @elseif($serial->status === 'disabled')
+                                                                <span class="badge bg-secondary"><i
+                                                                        class="fas fa-ban me-1"></i>معطل</span>
+                                                            @else
+                                                                <span class="badge bg-dark">{{ $serial->status }}</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->expires_at)
+                                                                <span
+                                                                    class="{{ $serial->expires_at->isPast() ? 'text-danger fw-bold' : ($serial->expires_at->diffInDays(now()) < 30 ? 'text-warning' : 'text-white') }}">
+                                                                    <i
+                                                                        class="far fa-calendar-alt me-1"></i>{{ $serial->expires_at->format('Y-m-d') }}
+                                                                </span>
+                                                            @else
+                                                                <span class="text-muted">دائم / غير محدد</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->order)
+                                                                <a href="{{ route('admin.orders.show', $serial->order_id) }}"
+                                                                    class="badge bg-dark text-info text-decoration-none border border-info border-opacity-25"
+                                                                    target="_blank">
+                                                                    <i
+                                                                        class="fas fa-shopping-bag me-1"></i>{{ $serial->order->order_number ?? '#' . $serial->order_id }}
+                                                                </a>
+                                                                @if ($serial->order->customer_name)
+                                                                    <div class="small text-muted mt-1">
+                                                                        {{ $serial->order->customer_name }}</div>
+                                                                @endif
+                                                            @else
+                                                                <span class="text-muted">—</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->delivered_at)
+                                                                <div><i
+                                                                        class="fas fa-check text-success me-1"></i>{{ $serial->delivered_at->format('Y-m-d') }}
+                                                                </div>
+                                                                <small
+                                                                    class="text-muted">{{ $serial->delivered_at->format('h:i A') }}</small>
+                                                            @elseif($serial->assigned_at)
+                                                                <div><i
+                                                                        class="fas fa-clock text-warning me-1"></i>{{ $serial->assigned_at->format('Y-m-d') }}
+                                                                </div>
+                                                                <small
+                                                                    class="text-muted">{{ $serial->assigned_at->format('h:i A') }}</small>
+                                                            @else
+                                                                <span class="text-muted">—</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->batch_reference)
+                                                                <code class="text-white-50"
+                                                                    style="font-size: 11px;">{{ $serial->batch_reference }}</code>
+                                                            @endif
+                                                            @if ($serial->source)
+                                                                <span class="badge bg-secondary opacity-75 d-block mt-1"
+                                                                    style="font-size: 10px;">{{ $serial->source }}</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if ($serial->notes)
+                                                                <span
+                                                                    title="{{ $serial->notes }}">{{ Str::limit($serial->notes, 30) }}</span>
+                                                            @else
+                                                                <span class="text-muted">—</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            <div>
+                                                                {{ $serial->created_at ? $serial->created_at->format('Y-m-d') : '—' }}
+                                                            </div>
+                                                            @if ($serial->creator)
+                                                                <small
+                                                                    class="text-muted">{{ $serial->creator->name }}</small>
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-center">
+                                                            @if (!in_array($serial->status, ['assigned', 'delivered']))
+                                                                <form method="POST"
+                                                                    action="{{ route('admin.products.serials.destroy', [$product, $serial]) }}"
+                                                                    class="d-inline"
+                                                                    onsubmit="return confirm('هل أنت متأكد من حذف هذا الكود غير المستخدم؟');">
+                                                                    @csrf
+                                                                    @method('DELETE')
+                                                                    <button type="submit"
+                                                                        class="btn btn-sm btn-outline-danger py-0 px-2"
+                                                                        title="حذف الكود">
+                                                                        <i class="fas fa-trash"></i>
+                                                                    </button>
+                                                                </form>
+                                                            @else
+                                                                <span class="badge bg-secondary"
+                                                                    title="لا يمكن حذف كود تم بيعه أو تسليمه"><i
+                                                                        class="fas fa-lock"></i></span>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @empty
+                                                    <tr>
+                                                        <td colspan="11" class="text-center py-5">
+                                                            <div class="text-muted">
+                                                                <i class="fas fa-barcode fa-3x mb-3 opacity-25"></i>
+                                                                <p class="mb-2">لا توجد أكواد تسلسلية مسجلة لهذا المنتج
+                                                                    حتى الآن.</p>
+                                                                <button type="button" class="btn btn-sm btn-primary"
+                                                                    data-bs-toggle="modal"
+                                                                    data-bs-target="#addBulkSerialsModal">
+                                                                    <i class="fas fa-plus me-1"></i>إضافة أكواد الآن
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- التصفح Pagination -->
+                                    @if ($serials->hasPages())
+                                        <div
+                                            class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                                            <small class="text-muted">عرض {{ $serials->firstItem() }} إلى
+                                                {{ $serials->lastItem() }} من إجمالي {{ $serials->total() }} كود</small>
+                                            <div>
+                                                {{ $serials->fragment('product-serials-section')->links() }}
+                                            </div>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -705,7 +947,16 @@
                                         <div class="text-ads-container language-ads-content active" data-lang="ar">
                                             @foreach ($product->adsText as $textAd)
                                                 @php
-                                                    $adText = json_decode($textAd->name, true);
+                                                    $translations = $textAd->getTranslations('name');
+                                                    if (!is_array($translations) || empty($translations)) {
+                                                        $raw = $textAd->getRawOriginal('name');
+                                                        $decoded = is_string($raw) ? json_decode($raw, true) : null;
+                                                        $adText = is_array($decoded)
+                                                            ? $decoded
+                                                            : ['ar' => (string) $textAd->name];
+                                                    } else {
+                                                        $adText = $translations;
+                                                    }
                                                 @endphp
                                                 <div class="text-ad-item">
                                                     <i class="fas fa-quote-right me-2"
@@ -722,7 +973,18 @@
                                                     data-lang="{{ $language->code }}">
                                                     @foreach ($product->adsText as $textAd)
                                                         @php
-                                                            $adText = json_decode($textAd->name, true);
+                                                            $translations = $textAd->getTranslations('name');
+                                                            if (!is_array($translations) || empty($translations)) {
+                                                                $raw = $textAd->getRawOriginal('name');
+                                                                $decoded = is_string($raw)
+                                                                    ? json_decode($raw, true)
+                                                                    : null;
+                                                                $adText = is_array($decoded)
+                                                                    ? $decoded
+                                                                    : ['ar' => (string) $textAd->name];
+                                                            } else {
+                                                                $adText = $translations;
+                                                            }
                                                         @endphp
                                                         <div class="text-ad-item">
                                                             <i class="fas fa-quote-right me-2"
@@ -894,6 +1156,89 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal إضافة كود مفرد -->
+    <div class="modal fade" id="addSingleSerialModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: var(--dark-card); border: 1px solid rgba(255,255,255,0.1);">
+                <form method="POST" action="{{ route('admin.products.serials.store', $product) }}">
+                    @csrf
+                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h5 class="modal-title text-white"><i class="fas fa-key me-2 text-primary"></i>إضافة كود تسلسلي
+                            جديد</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label text-white required">الكود الرقمي (Code)</label>
+                            <input type="text" name="serials[0][code]" required
+                                class="form-control form-control-sm" dir="ltr"
+                                placeholder="مثال: ABCD-1234-EFGH-5678">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">رقم PIN (إن وجد)</label>
+                            <input type="text" name="serials[0][pin]"
+                                class="form-control form-control-sm" dir="ltr"
+                                placeholder="مثال: 1234">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">تاريخ الانتهاء (الصلاحية)</label>
+                            <input type="datetime-local" name="serials[0][expires_at]"
+                                class="form-control form-control-sm">
+                            <small class="text-muted">اتركه فارغاً إذا كان الكود دائم الصلاحية</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white">ملاحظات</label>
+                            <textarea name="serials[0][notes]" rows="2" class="form-control form-control-sm"
+                                placeholder="أي ملاحظات حول الكود أو مصدره..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>حفظ الكود</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal إضافة أكواد متعددة Bulk -->
+    <div class="modal fade" id="addBulkSerialsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="background: var(--dark-card); border: 1px solid rgba(255,255,255,0.1);">
+                <form method="POST" action="{{ route('admin.products.serials.bulk-text', $product) }}">
+                    @csrf
+                    <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h5 class="modal-title text-white"><i class="fas fa-file-import me-2 text-success"></i>إضافة أكواد
+                            متعددة (Bulk Text)</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2"
+                            style="background: rgba(13,110,253,0.15); border-color: rgba(13,110,253,0.3); color: #fff;">
+                            <i class="fas fa-info-circle me-1"></i>أدخل كود واحد في كل سطر. التنسيق:
+                            <code>CODE|YYYY-MM-DD|PIN|ملاحظة</code><br>
+                            التاريخ وPIN والملاحظة اختيارية. مثال:<br>
+                            <code>CARD-12345|2027-12-31|9988|دفعة سبتمبر</code><br>
+                            <code>CARD-67890</code>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white required">نص الأكواد</label>
+                            <textarea name="serials_text" required class="form-control form-control-sm font-monospace"
+                                rows="10" dir="ltr" placeholder="CODE-001|2027-12-31|1234|دفعة 1&#10;CODE-002|2027-12-31&#10;CODE-003"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-success"><i class="fas fa-upload me-1"></i>استيراد
+                            الأكواد</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('js')
@@ -943,6 +1288,45 @@
                 // إخفاء جميع المحتويات
                 $('.seo-content').hide();
                 $('.seo-content[data-seo-lang="' + lang + '"]').show();
+            });
+
+            // إظهار وإخفاء الكود الرقمي
+            $(document).on('click', '.toggle-code-btn', function() {
+                const target = $($(this).data('target'));
+                const isMasked = target.text().trim() === String(target.data('masked')).trim();
+                if (isMasked) {
+                    target.text(target.data('full'));
+                    $(this).html('<i class="fas fa-eye-slash"></i>');
+                } else {
+                    target.text(target.data('masked'));
+                    $(this).html('<i class="fas fa-eye"></i>');
+                }
+            });
+
+            // نسخ النص إلى الحافظة
+            $(document).on('click', '.copy-text-btn', function() {
+                const text = $(this).attr('data-clipboard-text');
+                if (!text) return;
+                const btn = $(this);
+                const originalHtml = btn.html();
+                navigator.clipboard.writeText(text).then(function() {
+                    btn.html('<i class="fas fa-check text-success"></i>');
+                    setTimeout(function() {
+                        btn.html(originalHtml);
+                    }, 1500);
+                }).catch(function() {
+                    // Fallback for older browsers
+                    const tempInput = document.createElement("input");
+                    tempInput.value = text;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(tempInput);
+                    btn.html('<i class="fas fa-check text-success"></i>');
+                    setTimeout(function() {
+                        btn.html(originalHtml);
+                    }, 1500);
+                });
             });
 
             // عرض الصور الكبيرة

@@ -2,23 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class Favourite extends Model
+/**
+ * @deprecated Kept as a backwards-compatible alias. Use Favorite in new code.
+ */
+class Favourite extends Favorite
 {
-    protected $fillable = [
-        'user_id',
-        'product_id',
-        'type',
-    ];
-
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    public function product()
-    {
-        return $this->belongsTo(Product::class);
-    }
 }

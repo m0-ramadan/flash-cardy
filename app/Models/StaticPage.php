@@ -18,4 +18,12 @@ class StaticPage extends Model
         'meta_keywords',
         'status',
     ];
+
+    public function scopeActive($query){ return $query->where('status','active'); }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => cache()->forget('static_page:' . request()->route('slug')));
+        static::deleted(fn () => cache()->flush());
+    }
 }

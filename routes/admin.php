@@ -4,25 +4,28 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\AdsController;
 use App\Http\Controllers\Admin\ArticleController;
+use App\Http\Controllers\Admin\ArticleCommentModerationController;
+use App\Http\Controllers\Admin\FulfillmentController;
+use App\Http\Controllers\Admin\InventoryController;
+use App\Http\Controllers\Admin\ProductImportExportController;
+use App\Http\Controllers\Admin\RefundController;
+use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\ReviewModerationController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\BannerItemController;
 use App\Http\Controllers\Admin\CategoryController;
-use App\Http\Controllers\Admin\ContactController;
 use App\Http\Controllers\Admin\ContactUsController;
-use App\Http\Controllers\Admin\CountryController;
 use App\Http\Controllers\Admin\CouponController;
-use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\LanguageController;
-use App\Http\Controllers\Admin\LogisticServiceController;
-use App\Http\Controllers\Admin\ManagerController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PaymentMethodController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PermissionsController;
 use App\Http\Controllers\Admin\ProductController;
-use App\Http\Controllers\Admin\RegionController;
+use App\Http\Controllers\Admin\ProductSerialController;
+use App\Http\Controllers\Admin\OrderSerialController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\SettingController;
@@ -44,49 +47,34 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Add this route BEFORE any middleware groups
-Route::get('admin/categories/tree', [CategoryController::class, 'getTree'])->name('admin.categories.tree.data');
-
 // Authentication Routes
 Route::prefix('admin')->name('admin.')->middleware('guest:admin')->group(function () {
     Route::get('login', [AdminAuthController::class, 'loginPage'])->name('login.page');
-    Route::post('login/post', [AdminAuthController::class, 'login'])->name('login');
+    Route::post('login/post', [AdminAuthController::class, 'login'])->middleware('throttle:admin-login')->name('login');
 
     // Password Reset Routes
     Route::get('forgot-password', [AdminAuthController::class, 'showForgotPasswordForm'])->name('password.request');
-    Route::post('forgot-password', [AdminAuthController::class, 'sendResetOtp'])->name('password.email');
+    Route::post('forgot-password', [AdminAuthController::class, 'sendResetOtp'])->middleware('throttle:admin-password-reset')->name('password.email');
     Route::get('reset-password/{token}', [AdminAuthController::class, 'showResetPasswordForm'])->name('password.reset');
-    Route::post('reset-password', [AdminAuthController::class, 'resetPassword'])->name('password.update');
+    Route::post('reset-password', [AdminAuthController::class, 'resetPassword'])->middleware('throttle:admin-password-reset')->name('password.update');
 });
-Route::get('/', [AdminAuthController::class, 'home'])->name('admin.index')->middleware('auth:admin');
+Route::get('/', [AdminAuthController::class, 'home'])->name('admin.index')->middleware(['auth:admin', 'admin.active', 'admin.session', 'admin.permission']);
 
 // Admin Routes (Authenticated)
-Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function () {
+Route::prefix('admin')->as('admin.')->middleware(['auth:admin', 'admin.active', 'admin.session', 'admin.permission', 'admin.audit'])->group(function () {
     // Dashboard
     Route::post('logout', [AdminAuthController::class, 'logout'])->name('logout');
     Route::get('/visitors/chart', [VisitorController::class, 'chartData'])
         ->name('visitors.chart');
 
-    // Settings
-    Route::prefix('settings')->as('setting.')->group(function () {
-        Route::get('pages', [SettingController::class, 'pages'])->name('pages');
-        Route::get('edit', [SettingController::class, 'edit'])->name('edit');
-        Route::post('update', [SettingController::class, 'update'])->name('update');
-        Route::post('update-pages', [SettingController::class, 'updatepages'])->name('updatepages');
-    });
+    // Settings are handled by the unified SettingsController routes below.
 
     // Resource Routes
     Route::resources([
         'admins' => AdminController::class,
         // 'permissions' => PermissionsController::class,
-        'roles' => RolesController::class,
-        'countries' => CountryController::class,
         'contactus' => ContactUsController::class,
         'faqs' => FaqController::class,
-        'logistic-services' => LogisticServiceController::class,
-        'employees' => EmployeeController::class,
-        'managers' => ManagerController::class,
-        'regions' => RegionController::class,
     ]);
 
     Route::prefix('admins/')->name('admins.')->group(function () {
@@ -114,19 +102,18 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
 
     // coupons
     Route::prefix('coupons')->name('coupons.')->group(function () {
-        //  Route::resource('/', CouponController::class);
         Route::get('/', [CouponController::class, 'index'])->name('index');
         Route::get('/create', [CouponController::class, 'create'])->name('create');
         Route::post('/', [CouponController::class, 'store'])->name('store');
+        Route::post('/bulk-action', [CouponController::class, 'bulkAction'])->name('bulk-action');
+        Route::post('/generate-code', [CouponController::class, 'generateCode'])->name('generate-code');
+        Route::post('/validate-code', [CouponController::class, 'validateCode'])->name('validate-code');
+        Route::get('/export', [CouponController::class, 'export'])->name('export');
+        Route::post('/{coupon}/duplicate', [CouponController::class, 'duplicate'])->name('duplicate');
         Route::get('/{coupon}/edit', [CouponController::class, 'edit'])->name('edit');
         Route::put('/{coupon}', [CouponController::class, 'update'])->name('update');
         Route::delete('/{coupon}', [CouponController::class, 'destroy'])->name('destroy');
         Route::get('/{coupon}', [CouponController::class, 'show'])->name('show');
-        Route::post('bulk-action', [CouponController::class, 'bulkAction'])->name('bulk-action');
-        Route::post('{coupon}/duplicate', [CouponController::class, 'duplicate'])->name('duplicate');
-        Route::post('generate-code', [CouponController::class, 'generateCode'])->name('generate-code');
-        Route::post('validate-code', [CouponController::class, 'validateCode'])->name('validate-code');
-        Route::get('export', [CouponController::class, 'export'])->name('export');
     });
 
     // errors
@@ -145,21 +132,6 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/{id}/edit', [SocialMediaController::class, 'edit'])->name('edit');
         Route::put('/{id}', [SocialMediaController::class, 'update'])->name('update');
         Route::post('/bulk-update', [SocialMediaController::class, 'bulkUpdate'])->name('bulk-update');
-    });
-
-    // Users
-    Route::prefix('users')->as('user.')->group(function () {
-        Route::get('/', [UserController::class, 'index'])->name('index')->withoutMiddleware('admin:1')->middleware('admin:1,0');
-        Route::get('show/{id}', [UserController::class, 'show'])->name('show')->withoutMiddleware('admin:1')->middleware('admin:1,0');
-        Route::get('verify/email/{id}', [UserController::class, 'verifyEmail'])->name('verify-email');
-        Route::get('verify/{id}', [UserController::class, 'verify'])->name('verify');
-        Route::post('reject/{id}', [UserController::class, 'reject'])->name('reject');
-        Route::post('notify', [UserController::class, 'sendNotify'])->name('sendnotify');
-        Route::get('archive', [UserController::class, 'archive'])->name('archive');
-        Route::get('restore/{id}', [UserController::class, 'restore'])->name('restore');
-        Route::delete('force-delete/{id}', [UserController::class, 'forceDelete'])->name('forcedelete');
-        Route::post('wallet-control', [UserController::class, 'walletControl'])->name('walletcontrol')->withoutMiddleware('admin:1')->middleware('admin:1,0');
-        Route::post('package-control', [UserController::class, 'packageControl'])->name('package-control');
     });
 
     // Categories
@@ -198,9 +170,6 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::put('/{id}', [AdsController::class, 'update'])->name('update');     // Update ad
         Route::delete('/{id}', [AdsController::class, 'destroy'])->name('destroy'); // Delete ad
 
-        // Optional: Additional useful routes
-        Route::get('/create', [AdsController::class, 'create'])->name('create');   // Show create form (if needed)
-        Route::get('/{id}/edit', [AdsController::class, 'edit'])->name('edit');    // Show edit form (if needed)
     });
 
     // Products
@@ -218,6 +187,12 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('toggle-status/{id}', [ProductController::class, 'toggleStatus'])->name('toggle-status');
 
         Route::post('{product}/duplicate', [ProductController::class, 'duplicate'])->name('duplicate');
+        Route::post('{id}/restore', [ProductController::class, 'restore'])->name('restore');
+        Route::get('{product}/serials', [ProductSerialController::class, 'index'])->name('serials.index');
+        Route::post('{product}/serials', [ProductSerialController::class, 'store'])->name('serials.store');
+        Route::post('{product}/serials/bulk-text', [ProductSerialController::class, 'bulkText'])->name('serials.bulk-text');
+        Route::put('{product}/serials/{serial}', [ProductSerialController::class, 'update'])->name('serials.update');
+        Route::delete('{product}/serials/{serial}', [ProductSerialController::class, 'destroy'])->name('serials.destroy');
 
         // طرق الذكاء الاصطناعي
         Route::post('/ai/enhance', [ProductController::class, 'enhanceWithAI'])->name('ai-enhance');
@@ -254,11 +229,9 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/', [SubscribeController::class, 'index'])->name('index');
     });
 
-    // Additional Routes
+    // Additional product route retained for backward compatibility.
     Route::prefix('products')->as('products.')->group(function () {
-        Route::get('/export', [ProductController::class, 'export'])->name('export');
-        Route::post('/{product}/update-image', [ProductController::class, 'updateImage'])
-            ->name('update-image');
+        Route::post('/{product}/update-image', [ProductController::class, 'updateImage'])->name('update-image');
     });
 
     // Payment Method
@@ -290,6 +263,9 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/', [UserController::class, 'index'])->name('index');
         Route::get('/create', [UserController::class, 'create'])->name('create');
         Route::post('/', [UserController::class, 'store'])->name('store');
+        Route::post('/notify', [UserController::class, 'sendNotify'])->name('notify');
+        Route::get('/export', [UserController::class, 'export'])->name('export');
+        Route::get('/stats', [UserController::class, 'getStats'])->name('stats');
         Route::get('/{user}', [UserController::class, 'show'])->name('show');
         Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
         Route::put('/{user}', [UserController::class, 'update'])->name('update');
@@ -300,8 +276,6 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/{user}/reviews', [UserController::class, 'reviews'])->name('reviews');
         Route::get('/{user}/favourites', [UserController::class, 'favourites'])->name('favourites');
         Route::get('/{user}/activities', [UserController::class, 'activities'])->name('activities');
-        Route::get('/export', [UserController::class, 'export'])->name('export');
-        Route::get('/stats', [UserController::class, 'getStats'])->name('stats');
         // Wallet Routes - يجب أن يكون الـ parameter قبل wallet
         Route::prefix('{user}/wallet')->as('wallet.')->group(function () {
             Route::get('/info', [UserController::class, 'walletInfo'])->name('info');
@@ -344,6 +318,8 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/export', [OrderController::class, 'export'])->name('export');
         Route::get('/{order}/print', [OrderController::class, 'print'])->name('print');
         Route::post('/{order}/update-status', [OrderController::class, 'updateStatus'])->name('update-status');
+        Route::post('/items/{item}/serials/assign-available', [OrderSerialController::class, 'assignAvailable'])->name('items.serials.assign-available');
+        Route::post('/items/{item}/serials/add-and-assign', [OrderSerialController::class, 'addAndAssign'])->name('items.serials.add-and-assign');
 
         Route::post('/', [OrderController::class, 'store'])->name('store');
         Route::get('/{order}/edit', [OrderController::class, 'edit'])->name('edit');
@@ -386,7 +362,7 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
     // Routes for AI-powered articles
 
     Route::prefix('articles')->name('articles.')->group(function () {
-        Route::get('/create-with-ai', [ArticleController::class, 'create'])->name('create');
+        Route::get('/create-with-ai', [ArticleController::class, 'create'])->name('create-with-ai');
         Route::post('/store-with-ai', [ArticleController::class, 'storeWithAI'])->name('store-with-ai');
         Route::post('/ai-enhance', [ArticleController::class, 'enhanceWithAI'])->name('ai-enhance');
         Route::post('/ai-generate', [ArticleController::class, 'generateWithAI'])->name('ai-generate');
@@ -405,14 +381,13 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::post('/ai-enhance-text', [ArticleController::class, 'enhanceText'])->name('ai-enhance-text');
 
         // المقالات
+        Route::get('/statistics', [ArticleController::class, 'statistics'])->name('statistics');
         Route::resource('/', ArticleController::class);
         Route::post('/bulk-actions', [ArticleController::class, 'bulkActions'])->name('bulk-actions');
         Route::patch('/{article}/toggle-status', [ArticleController::class, 'toggleStatus'])->name('toggle-status');
         Route::patch('/{article}/toggle-featured', [ArticleController::class, 'toggleFeatured'])->name('toggle-featured');
     });
 
-    // إحصائيات المقالات
-    Route::get('/articles/statistics', [ArticleController::class, 'statistics'])->name('articles.statistics');
 
     Route::prefix('assign-roles')->name('roles.')->group(function () {
         Route::get('/', [RoleController::class, 'assignIndex'])->name('assign.index');
@@ -427,7 +402,6 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::get('/{staticPage}', [StaticPageController::class, 'show'])->name('show');
         Route::get('/{page}/edit', [StaticPageController::class, 'edit'])->name('edit');
         Route::put('/{page}', [StaticPageController::class, 'update'])->name('update');
-        name:
         Route::delete('/{page}', [StaticPageController::class, 'destroy'])->name('destroy');
         Route::post('/bulk-action', [StaticPageController::class, 'bulkAction'])->name('bulk-action');
         // طرق الذكاء الاصطناعي
@@ -447,9 +421,6 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
 
             Route::post('/simplify-content', [StaticPageController::class, 'enhanceContentWithAI'])
                 ->name('simplify-content');
-
-            Route::post('/translate', [StaticPageController::class, 'translateWithAI'])
-                ->name('translate');
 
             // القوالب
             Route::post('/load-template', [StaticPageController::class, 'loadTemplateWithAI'])
@@ -520,7 +491,7 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
             Route::delete('/', [SettingsController::class, 'deleteFile'])->name('files.delete');
             Route::post('/clear-temp', [SettingsController::class, 'clearTempFiles'])->name('files.clear-temp');
         });
-        Route::get('/', [SettingsController::class, 'index'])->name('index');
+
 
         // AJAX endpoints
         Route::get('/storage-usage', [SettingsController::class, 'getStorageUsage'])->name('storage-usage');
@@ -530,6 +501,46 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
         Route::post('/clear-cache', [SettingsController::class, 'clearCache'])->name('clear-cache');
         Route::post('/toggle-maintenance', [SettingsController::class, 'toggleMaintenance'])->name('toggle-maintenance');
     });
+    // Commerce operations
+    Route::prefix('inventory')->name('inventory.')->group(function () {
+        Route::get('/', [InventoryController::class, 'index'])->name('index');
+        Route::post('/products/{product}/adjust', [InventoryController::class, 'adjust'])->name('adjust');
+    });
+
+    Route::prefix('fulfillments')->name('fulfillments.')->group(function () {
+        Route::get('/', [FulfillmentController::class, 'index'])->name('index');
+        Route::post('/items/{item}/retry', [FulfillmentController::class, 'retry'])->name('retry');
+    });
+
+    Route::prefix('refunds')->name('refunds.')->group(function () {
+        Route::get('/', [RefundController::class, 'index'])->name('index');
+        Route::post('/orders/{order}', [RefundController::class, 'store'])->name('store');
+        Route::post('/{refund}/retry', [RefundController::class, 'retry'])->name('retry');
+    });
+
+    Route::prefix('reviews')->name('reviews.')->group(function () {
+        Route::get('/', [ReviewModerationController::class, 'index'])->name('index');
+        Route::post('/{review}/approve', [ReviewModerationController::class, 'approve'])->name('approve');
+        Route::post('/{review}/reject', [ReviewModerationController::class, 'reject'])->name('reject');
+        Route::delete('/{review}', [ReviewModerationController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('article-comments')->name('article-comments.')->group(function () {
+        Route::get('/', [ArticleCommentModerationController::class, 'index'])->name('index');
+        Route::post('/{comment}/approve', [ArticleCommentModerationController::class, 'approve'])->name('approve');
+        Route::post('/{comment}/reject', [ArticleCommentModerationController::class, 'reject'])->name('reject');
+        Route::delete('/{comment}', [ArticleCommentModerationController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+
+    Route::prefix('product-data')->name('product-data.')->group(function () {
+        Route::get('/import', [ProductImportExportController::class, 'form'])->name('import.form');
+        Route::post('/import', [ProductImportExportController::class, 'import'])->name('import');
+        Route::get('/export', [ProductImportExportController::class, 'export'])->name('export');
+        Route::get('/export-excel', [ProductImportExportController::class, 'exportExcel'])->name('export-excel');
+    });
+
     // مسارات التواصل
     Route::prefix('contact-us')->name('contact-us.')->group(function () {
         Route::get('/', [ContactUsController::class, 'index'])->name('index');
@@ -544,4 +555,4 @@ Route::prefix('admin')->as('admin.')->middleware('auth:admin')->group(function (
 });
 
 // Visitor stats route (outside admin group)
-Route::get('/orders/stats/{year}', [VisitorController::class, 'ordersStats']);
+Route::get('/orders/stats/{year}', [VisitorController::class, 'ordersStats'])->middleware(['auth:admin', 'admin.active', 'admin.session', 'admin.permission'])->name('admin.orders.year-stats');

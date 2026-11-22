@@ -8,10 +8,13 @@ use App\Models\ContactUsReply;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use App\Services\Notifications\NotificationService;
 
 
 class ContactUsController extends Controller
 {
+    public function __construct(private NotificationService $notifications) {}
+
     /**
      * Display a listing of contact messages.
      */
@@ -58,12 +61,12 @@ class ContactUsController extends Controller
         // إحصائيات
         $stats = [
             'total' => ContactUs::count(),
-            'pending' => ContactUs::where('status', 'pending')->count(),
-            'replied' => ContactUs::where('status', 'replied')->count(),
-            'archived' => ContactUs::where('status', 'archived')->count(),
+            'pending' => ContactUs::whereIn('status', ['pending','open'])->count(),
+            'replied' => ContactUs::whereIn('status', ['replied','in_progress'])->count(),
+            'archived' => ContactUs::whereIn('status', ['archived','closed'])->count(),
         ];
 
-        $messages = $query->paginate(15);
+        $messages = $query->paginate(15)->withQueryString();
 
         return view('Admin.contact_us.index', compact('messages', 'stats'));
     }
@@ -103,13 +106,16 @@ class ContactUsController extends Controller
         try {
             // إضافة الرد
             $reply = $contactUs->addReply(
-                auth()->id(),
+                auth('admin')->id(),
                 $request->message,
                 'admin'
             );
 
             // تحديث حالة الرسالة إلى تم الرد
-            $contactUs->update(['status' => 'replied']);
+            $contactUs->update(['status' => 'in_progress']);
+            if ($contactUs->user) {
+                $this->notifications->user($contactUs->user, 'رد جديد من الدعم', trim(strip_tags($request->message)), 'support_reply', ['ticket_id'=>$contactUs->id], true);
+            }
 
             // هنا يمكنك إرسال إشعار أو بريد إلكتروني للعميل
 
@@ -120,14 +126,14 @@ return response()->json([
         'id' => $reply->id,
         'message' => $reply->message,
         'created_at' => optional($reply->created_at)->diffForHumans() ?? now()->diffForHumans(),
-        'user_name' => optional(auth()->user())->name ?? 'مسؤول',
+        'user_name' => optional(auth('admin')->user())->name ?? 'مسؤول',
     ]
 ]);
 
 } catch (\Exception $e) {
     Log::error('ContactUs reply error', [
         'contact_us_id' => $contactUs->id,
-        'user_id' => auth()->id(),
+        'admin_id' => auth('admin')->id(),
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString(),
     ]);
@@ -135,8 +141,6 @@ return response()->json([
     return response()->json([
         'success' => false,
         'message' => 'حدث خطأ أثناء إرسال الرد',
-        // مؤقتًا للتشخيص (شيله في production):
-        'debug' => $e->getMessage(),
     ], 500);
 }
     }
@@ -147,7 +151,7 @@ return response()->json([
     public function updateStatus(Request $request, ContactUs $contactUs)
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'required|in:pending,read,replied,archived'
+            'status' => 'required|in:pending,open,read,in_progress,replied,resolved,closed,archived'
         ]);
 
         if ($validator->fails()) {
@@ -182,7 +186,7 @@ return response()->json([
         $validator = Validator::make($request->all(), [
             'ids' => 'required|array',
             'ids.*' => 'exists:contact_us,id',
-            'status' => 'required|in:pending,read,replied,archived'
+            'status' => 'required|in:pending,open,read,in_progress,replied,resolved,closed,archived'
         ]);
 
         if ($validator->fails()) {

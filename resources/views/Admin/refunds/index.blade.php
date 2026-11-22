@@ -1,0 +1,7 @@
+@extends('Admin.layout.master')
+@section('title','الاستردادات')
+@section('content')
+<div class="container-xxl flex-grow-1 container-p-y"><h4>الاستردادات</h4>
+<form class="row g-2 mb-3"><div class="col-md-4"><input name="search" value="{{request('search')}}" class="form-control" placeholder="رقم الطلب/مرجع المزود"></div><div class="col-md-3"><select name="status" class="form-select"><option value="">كل الحالات</option>@foreach(['requested','processing','refund_pending','refunded','failed'] as $s)<option @selected(request('status')===$s)>{{ $s }}</option>@endforeach</select></div><div class="col"><button class="btn btn-primary">فلترة</button></div></form>
+<div class="card"><div class="table-responsive"><table class="table"><thead><tr><th>#</th><th>الطلب</th><th>المبلغ</th><th>البوابة</th><th>الحالة</th><th>المرجع</th><th>السبب</th><th></th></tr></thead><tbody>@foreach($refunds as $r)<tr><td>{{ $r->id }}</td><td>{{ $r->order?->order_number }}</td><td>{{ $r->amount }} {{ $r->currency }}</td><td>{{ $r->gateway }}</td><td>{{ $r->status }}</td><td>{{ $r->provider_reference }}</td><td>{{ $r->reason }}</td><td>@if(in_array($r->status,['failed','requested']))<form method="POST" action="{{route('admin.refunds.retry',$r)}}">@csrf<button class="btn btn-sm btn-warning">إعادة المحاولة</button></form>@endif</td></tr>@endforeach</tbody></table></div><div class="card-footer">{{$refunds->links()}}</div></div></div>
+@endsection

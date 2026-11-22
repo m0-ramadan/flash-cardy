@@ -642,7 +642,16 @@
                                                     {{ $code }}
                                                 </span>
                                             @endif
-                                        @endforeach
+                                        @if(!empty($item->serial_codes))
+                                        <div style="font-size:11px;margin-top:4px"><strong>الأكواد الرقمية:</strong>
+                                            @foreach($item->serial_codes as $serial)
+                                                @if(is_array($serial))
+                                                    {{ $serial['voucher_code'] ?? $serial['serial_number'] ?? '••••' }}@if(!empty($serial['valid_to'])) (حتى {{ $serial['valid_to'] }})@endif{{ !$loop->last ? ' | ' : '' }}
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                    @endforeach
                                     </div>
                                 </td>
                             </tr>

@@ -216,6 +216,19 @@ class CouponController extends Controller
             ->with('success', 'تم حذف الكوبون بنجاح');
     }
 
+    public function duplicate(Coupon $coupon)
+    {
+        $copy = $coupon->replicate();
+        $base = strtoupper(preg_replace('/[^A-Z0-9]/i', '', (string)$coupon->code)) ?: 'COUPON';
+        do { $code = substr($base,0,35).'-'.strtoupper(bin2hex(random_bytes(3))); }
+        while (Coupon::where('code',$code)->exists());
+        $copy->code = $code;
+        $copy->name = trim((string)$coupon->name).' - Copy';
+        $copy->is_active = false;
+        $copy->save();
+        return redirect()->route('admin.coupons.edit',$copy)->with('success','تم نسخ الكوبون كنسخة غير نشطة.');
+    }
+
     /**
      * Bulk actions for coupons.
      */

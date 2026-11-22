@@ -25,7 +25,7 @@ class CreateOrderRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return true;
+        return (bool) $this->user();
     }
 
     protected function prepareForValidation(): void
@@ -54,7 +54,9 @@ class CreateOrderRequest extends FormRequest
 
             'notes' => 'nullable|string|max:1000',
 
-            'coupon_code' => 'nullable|string',
+            'coupon_code' => 'nullable|string|max:100',
+            'address_id' => 'nullable|integer|exists:user_addresses,id',
+            'shipping_address_id' => 'nullable|integer|exists:user_addresses,id',
 
             'price_amount' => 'prohibited',
             'price_currency' => 'prohibited',

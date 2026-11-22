@@ -18,6 +18,8 @@ class Kernel extends HttpKernel
     protected $middleware = [
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
+        \App\Http\Middleware\RequestContext::class,
+        \App\Http\Middleware\SecurityHeaders::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
@@ -80,5 +82,10 @@ class Kernel extends HttpKernel
         //  'permission' => \App\Http\Middleware\CheckPermission::class,
         'permission' => PermissionMiddleware::class,
         'role' => RoleMiddleware::class, // Optional
+        'user.active' => \App\Http\Middleware\EnsureUserIsActive::class,
+        'admin.session' => \App\Http\Middleware\EnsureAdminSessionIsFresh::class,
+        'admin.active' => \App\Http\Middleware\EnsureAdminIsActive::class,
+        'admin.permission' => \App\Http\Middleware\EnsureAdminRoutePermission::class,
+        'admin.audit' => \App\Http\Middleware\AuditAdminMutation::class,
     ];
 }

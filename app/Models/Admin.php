@@ -21,7 +21,9 @@ class Admin extends Authenticatable
         'email',
         'password',
         'phone',
-        'avatar'
+        'avatar',
+        'is_active',
+        'last_login_at'
     ];
 
     protected $hidden = [
@@ -31,6 +33,8 @@ class Admin extends Authenticatable
 
     protected $casts = [
         'password' => 'hashed',
+        'is_active' => 'boolean',
+        'last_login_at' => 'datetime',
     ];
 
     // public function isSuperAdmin()

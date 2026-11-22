@@ -26,7 +26,8 @@ class Article extends Model
         'is_featured',
         'views_count',
         'reading_time',
-        'published_at'
+        'published_at',
+        'status'
     ];
 
     protected $casts = [
@@ -182,7 +183,17 @@ class Article extends Model
     // Scope للمقالات المنشورة
     public function scopePublished($query)
     {
-        return $query->where('published_at', '<=', now());
+        return $query->where('status', 'published')->whereNotNull('published_at')->where('published_at', '<=', now());
+    }
+
+    public function scopePopular($query)
+    {
+        return $query->orderByDesc('views_count');
+    }
+
+    public function incrementViews(): void
+    {
+        $this->increment('views_count');
     }
 
     // حساب وقت القراءة
@@ -192,5 +203,14 @@ class Article extends Model
         $wordCount = str_word_count(strip_tags($content));
         $readingTime = ceil($wordCount / 200);
         return $readingTime > 0 ? $readingTime : 1;
+    }
+
+    protected static function booted(): void
+    {
+        $flush = function () {
+            try { cache()->increment('articles_cache_version'); } catch (\Throwable $e) { cache()->forever('articles_cache_version', time()); }
+        };
+        static::saved($flush);
+        static::deleted($flush);
     }
 }

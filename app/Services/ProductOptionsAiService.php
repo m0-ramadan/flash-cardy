@@ -46,7 +46,7 @@ class ProductOptionsAiService
 
     public function __construct()
     {
-        $this->deepseekApiKey = env('DEEPSEEK_API_KEY');
+        $this->deepseekApiKey = config('services.deepseek.api_key');
     }
 
     /**

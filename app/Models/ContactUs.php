@@ -66,15 +66,17 @@ class ContactUs extends Model
      * @param  string $message
      * @param  string $senderType  admin|user
      */
-    public function addReply(int $userId, string $message, string $senderType = 'admin')
+    public function addReply(int $senderId, string $message, string $senderType = 'admin')
     {
         if (!in_array($senderType, ['admin', 'user'], true)) {
             throw new \InvalidArgumentException('senderType must be admin or user');
         }
 
         return $this->replies()->create([
-            'user_id'     => $userId,
-            'message'     => $message,
+            'user_id' => $senderType === 'user' ? $senderId : null,
+            'admin_id' => $senderType === 'admin' ? $senderId : null,
+            'sender_id' => $senderId,
+            'message' => $message,
             'sender_type' => $senderType,
         ]);
     }

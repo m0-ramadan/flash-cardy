@@ -49,10 +49,9 @@ class ArticleController extends Controller
             } elseif ($request->status === 'featured') {
                 $query->where('is_featured', true);
             } elseif ($request->status === 'published') {
-                $query->where('published_at', '<=', now());
+                $query->where('status','published')->whereNotNull('published_at')->where('published_at','<=',now());
             } elseif ($request->status === 'draft') {
-                $query->whereNull('published_at')
-                    ->orWhere('published_at', '>', now());
+                $query->where('status','draft');
             }
         }
 
@@ -77,7 +76,7 @@ class ArticleController extends Controller
             $query->where('views_count', '<=', $request->views_to);
         }
 
-        $articles = $query->paginate(15);
+        $articles = $query->paginate(15)->withQueryString();
         $categories = ArticleCategory::active()->get();
         $authors = User::get();
 
@@ -88,9 +87,7 @@ class ArticleController extends Controller
             'inactive' => Article::where('is_active', false)->count(),
             'featured' => Article::where('is_featured', true)->count(),
             'total_views' => Article::sum('views_count'),
-            'draft' => Article::whereNull('published_at')
-                ->orWhere('published_at', '>', now())
-                ->count(),
+            'draft' => Article::where('status','draft')->count(),
         ];
 
         return view('Admin.articles.index', compact('articles', 'categories', 'authors', 'stats'));
@@ -209,6 +206,7 @@ class ArticleController extends Controller
                 'is_active' => $request->boolean('is_active'),
                 'is_featured' => $request->boolean('is_featured'),
                 'published_at' => $request->published_at,
+                'status' => ($request->boolean('is_active') && $request->published_at && \Carbon\Carbon::parse($request->published_at)->lte(now())) ? 'published' : 'draft',
             ];
 
             // حساب وقت القراءة (باللغة العربية)
@@ -553,6 +551,7 @@ class ArticleController extends Controller
             'is_active' => $request->boolean('is_active'),
             'is_featured' => $request->boolean('is_featured'),
             'published_at' => $validated['published_at'],
+            'status' => ($request->boolean('is_active') && !empty($validated['published_at']) && \Carbon\Carbon::parse($validated['published_at'])->lte(now())) ? 'published' : 'draft',
             'reading_time' => $this->calculateReadingTime($validated['content_ar']),
         ];
 
@@ -839,55 +838,32 @@ class ArticleController extends Controller
      */
     public function update(Request $request, Article $article)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'excerpt' => 'nullable|string|max:500',
-            'category_id' => 'required|exists:article_categories,id',
-            'author_id' => 'required|exists:users,id',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-            'image_alt' => 'nullable|string|max:255',
-            'meta_title' => 'nullable|string|max:255',
-            'meta_description' => 'nullable|string|max:500',
-            'meta_keywords' => 'nullable|string|max:255',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'published_at' => 'nullable|date',
-            'tags' => 'nullable|array',
-            'tags.*' => 'exists:tags,id',
+        $validated=$request->validate([
+            'title'=>'required|string|max:255','content'=>'required|string','excerpt'=>'nullable|string|max:500',
+            'category_id'=>'required|exists:article_categories,id','author_id'=>'required|exists:users,id',
+            'image'=>'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048','image_alt'=>'nullable|string|max:255',
+            'meta_title'=>'nullable|string|max:255','meta_description'=>'nullable|string|max:500','meta_keywords'=>'nullable|string|max:255',
+            'is_active'=>'sometimes|boolean','is_featured'=>'sometimes|boolean','published_at'=>'nullable|date',
+            'tags'=>'nullable|array','tags.*'=>'exists:tags,id',
         ]);
-
-        // تحديث slug إذا تغير العنوان
-        if ($validated['title'] !== $article->title) {
-            $validated['slug'] = Str::slug($validated['title']) . '-' . Str::random(6);
-        }
-
-        // رفع صورة جديدة إذا وجدت
-        if ($request->hasFile('image')) {
-            // حذف الصورة القديمة
-            if ($article->image) {
-                Storage::disk('public')->delete($article->image);
-            }
-
-            $imagePath = $request->file('image')->store('articles', 'public');
-            $validated['image'] = $imagePath;
-        }
-
-        // حساب وقت القراءة
-        $validated['reading_time'] = $this->calculateReadingTime($validated['content']);
-
-        // تحديث المقال
-        $article->update($validated);
-
-        // تحديث التاغات
-        if ($request->has('tags')) {
-            $article->tags()->sync($request->tags);
-        } else {
-            $article->tags()->detach();
-        }
-
-        return redirect()->route('admin.articles.index')
-            ->with('success', 'تم تحديث المقال بنجاح');
+        $article->setTranslation('title','ar',$validated['title']);
+        $article->setTranslation('content','ar',$validated['content']);
+        $article->setTranslation('excerpt','ar',$validated['excerpt']??'');
+        $article->setTranslation('meta_title','ar',$validated['meta_title']??'');
+        $article->setTranslation('meta_description','ar',$validated['meta_description']??'');
+        $article->setTranslation('meta_keywords','ar',$validated['meta_keywords']??'');
+        $article->slug=Str::slug($validated['title']).'-'.Str::lower(Str::random(6));
+        $article->category_id=$validated['category_id']; $article->author_id=$validated['author_id'];
+        $article->image_alt=$validated['image_alt']??null; $article->is_active=$request->boolean('is_active');
+        $article->is_featured=$request->boolean('is_featured'); $article->published_at=$validated['published_at']??null;
+        $article->status=($article->is_active && $article->published_at && $article->published_at->lte(now()))?'published':'draft';
+        $article->reading_time=$this->calculateReadingTime($validated['content']);
+        if($request->hasFile('image')){
+            $new=$request->file('image')->store('articles','public'); $old=$article->image; $article->image=$new;
+            $article->save(); if($old&&$old!==$new) Storage::disk('public')->delete($old);
+        } else $article->save();
+        $article->tags()->sync($request->input('tags',[]));
+        return redirect()->route('admin.articles.index')->with('success','تم تحديث المقال بنجاح');
     }
 
     /**
@@ -1455,5 +1431,17 @@ class ArticleController extends Controller
         ];
 
         return "{$improvements[$type]}: {$text}";
+    }
+
+    public function statistics()
+    {
+        $stats = [
+            'total' => \App\Models\Article::count(),
+            'published' => \App\Models\Article::where('status','published')->count(),
+            'draft' => \App\Models\Article::where('status','draft')->count(),
+            'featured' => \App\Models\Article::where('is_featured',true)->count(),
+            'this_month' => \App\Models\Article::whereBetween('created_at',[now()->startOfMonth(),now()->endOfMonth()])->count(),
+        ];
+        return view('Admin.articles.statistics', compact('stats'));
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Resources\Website;
 use App\Services\LikeCardService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Crypt;
 
 class OrderDetailsResource extends JsonResource
 {
@@ -39,11 +40,15 @@ class OrderDetailsResource extends JsonResource
 
                     'serials' => collect($item->serial_codes ?? [])->map(function ($code) use ($likeCardService) {
                         $serialCode = is_array($code) ? ($code['serial_code'] ?? null) : null;
+                        $serialNumber = is_array($code) ? ($code['serial_number'] ?? null) : $code;
 
                         try {
-                            $voucherCode = $serialCode
-                                ? $likeCardService->decryptSerial($serialCode)
-                                : null;
+                            if ($serialCode && is_array($code) && ($code['source'] ?? null) === 'local') {
+                                $voucherCode = Crypt::decryptString($serialCode);
+                                $serialNumber = $serialNumber ?: $voucherCode;
+                            } else {
+                                $voucherCode = $serialCode ? $likeCardService->decryptSerial($serialCode) : null;
+                            }
                         } catch (\Throwable $e) {
                             $voucherCode = null;
                         }
@@ -52,9 +57,7 @@ class OrderDetailsResource extends JsonResource
                             'id'            => is_array($code)
                                 ? ($code['serial_id'] ?? $code['id'] ?? null)
                                 : null,
-                            'serial_number' => is_array($code)
-                                ? ($code['serial_number'] ?? null)
-                                : $code,
+                            'serial_number' => $serialNumber,
                             'serial_code'   => $serialCode,
                             'voucher_code'  => $voucherCode,
                             'valid_to'      => is_array($code)

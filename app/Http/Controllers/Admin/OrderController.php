@@ -12,8 +12,14 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\Like4AppService;
 use App\Services\LikeCardService;
+use App\Services\Inventory\InventoryService;
+use App\Services\Fulfillment\Like4AppFulfillmentService;
+use App\Services\Fulfillment\LocalSerialFulfillmentService;
+use App\Services\Orders\OrderLifecycleService;
+use App\Models\PaymentTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -22,8 +28,12 @@ class OrderController extends Controller
     protected $like4AppService;
     protected $likeCardService;
 
-    public function __construct(Like4AppService $like4AppService, LikeCardService $likeCardService)
-    {
+    public function __construct(
+        Like4AppService $like4AppService, LikeCardService $likeCardService,
+        private InventoryService $inventory, private Like4AppFulfillmentService $like4AppFulfillment,
+        private LocalSerialFulfillmentService $localSerialFulfillment,
+        private OrderLifecycleService $lifecycle
+    ) {
         $this->like4AppService = $like4AppService;
         $this->likeCardService = $likeCardService;
     }
@@ -90,7 +100,7 @@ class OrderController extends Controller
             'shipped' => Order::where('status', 'shipped')->count(),
             'delivered' => Order::where('status', 'delivered')->count(),
             'cancelled' => Order::where('status', 'cancelled')->count(),
-            'total_revenue' => Order::where('status', '!=', 'cancelled')->sum('total_amount'),
+            'total_revenue' => PaymentTransaction::whereIn('status', ['paid','finished','confirmed','success'])->sum('original_amount'),
         ];
 
         return view('Admin.orders.index', compact('orders', 'stats'));
@@ -138,29 +148,57 @@ class OrderController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'customer_name' => 'required|string|max:255',
+            'customer_email' => 'nullable|email|max:255',
+            'customer_phone' => 'nullable|string|max:50',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1|max:1000',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'tax_amount' => 'nullable|numeric|min:0',
+            'payment_method' => 'required|string|max:100',
+            'status' => 'nullable|in:pending,processing,completed,delivered,cancelled',
+            'notes' => 'nullable|string|max:5000',
+        ]);
+
         DB::beginTransaction();
 
         try {
             $subtotal = 0;
             $hasLike4AppProduct = false;
-            $like4AppItems = [];
+            $hasLocalSerialProduct = false;
 
             foreach ($request->items as $index => $item) {
-                $product = Product::find($item['product_id']);
+                $product = Product::whereKey($item['product_id'])->lockForUpdate()->first();
 
                 if (!$product) {
                     throw new \Exception("المنتج غير موجود: {$item['product_id']}");
                 }
 
                 $quantity = (int) $item['quantity'];
+                if ((int)$product->status_id !== 1) {
+                    throw new \Exception("المنتج {$product->name} غير نشط ولا يمكن إضافته لطلب جديد.");
+                }
+                if ((int)$product->max_quantity > 0 && $quantity > (int)$product->max_quantity) {
+                    throw new \Exception("أقصى كمية مسموحة للمنتج {$product->name} هي {$product->max_quantity}.");
+                }
                 $itemTotal = $quantity * $product->final_price;
                 $subtotal += $itemTotal;
 
-                if ($product->external_id) {
+                $source = (string)($product->fulfillment_source ?: ($product->external_id ? 'like4app' : 'none'));
+                if ($source === 'like4app') {
                     $hasLike4AppProduct = true;
                 }
+                if ($source === 'local_serials') {
+                    $hasLocalSerialProduct = true;
+                    if (!$product->allow_serial_backorder && $product->serials()->usable()->count() < $quantity) {
+                        throw new \Exception("لا توجد أكواد كافية للمنتج {$product->name}.");
+                    }
+                }
 
-                if (!$product->external_id && $product->stock !== null) {
+                if ($product->inventory_type === 'physical' && $product->track_stock && $product->stock !== null) {
                     if ($product->stock < $quantity) {
                         throw new \Exception("الكمية المطلوبة من {$product->name} غير متوفرة. المتاح: {$product->stock}");
                     }
@@ -170,18 +208,27 @@ class OrderController extends Controller
             $discount = $request->discount_amount ?? 0;
             $tax = $request->tax_amount ?? 0;
             $total = $subtotal - $discount + $tax;
+            if ($discount > $subtotal) {
+                throw new \Exception('قيمة الخصم لا يمكن أن تتجاوز إجمالي المنتجات.');
+            }
+            $total = max(0, $total);
 
             $order = Order::create([
                 'user_id' => $request->user_id,
                 'customer_name' => $request->customer_name,
                 'customer_email' => $request->customer_email,
                 'customer_phone' => $request->customer_phone ?? null,
-                'status' => $hasLike4AppProduct ? 'processing' : 'completed',
+                'status' => $request->input('status', ($hasLike4AppProduct || $hasLocalSerialProduct) ? 'processing' : 'completed'),
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'tax_amount' => $tax,
                 'total_amount' => $total,
                 'payment_method' => $request->payment_method,
+                'currency' => config('commerce.base_currency', 'EGP'),
+                'order_state' => 'processing',
+                'payment_state' => 'pending',
+                'status_payment' => 'pending',
+                'fulfillment_status' => ($hasLike4AppProduct || $hasLocalSerialProduct) ? 'processing' : 'fulfilled',
                 'notes' => $request->notes,
                 'provider' => $hasLike4AppProduct ? 'like4app' : 'internal',
             ]);
@@ -195,9 +242,18 @@ class OrderController extends Controller
             foreach ($request->items as $item) {
                 $product = Product::find($item['product_id']);
                 $quantity = (int) $item['quantity'];
+                $source = (string)($product->fulfillment_source ?: ($product->external_id ? 'like4app' : 'none'));
+                $mode = (string)($product->fulfillment_mode ?: ($source === 'like4app' ? 'automatic' : 'manual'));
+                $snapshot = [
+                    'id'=>$product->id,'sku'=>$product->sku,'name'=>$product->getTranslations('name'),
+                    'description'=>$product->getTranslations('description'),'subtitle'=>$product->subtitle,'brand'=>$product->brand,'region'=>$product->region,'denomination'=>$product->denomination,'validity_text'=>$product->validity_text,
+                    'image_path'=>$product->image_path,'external_id'=>$product->external_id,'inventory_type'=>$product->inventory_type,
+                    'type'=>$product->type,'instructions'=>$product->instructions,'terms'=>$product->terms,'url'=>$product->url,
+                    'fulfillment_source'=>$source,'fulfillment_mode'=>$mode,
+                ];
 
                 // منتجات Like4App: كل وحدة OrderItem مستقل
-                if ($product->external_id) {
+                if ($source === 'like4app') {
                     for ($i = 0; $i < $quantity; $i++) {
                         $orderItem = OrderItem::create([
                             'order_id' => $order->id,
@@ -205,6 +261,11 @@ class OrderController extends Controller
                             'quantity' => 1,
                             'price_per_unit' => $product->final_price,
                             'total_price' => $product->final_price,
+                            'product_snapshot' => $snapshot,
+                            'provider_product_id' => $product->external_id,
+                            'fulfillment_source_snapshot' => 'like4app',
+                            'fulfillment_mode_snapshot' => $mode,
+                            'serial_status' => 'pending',
                             'provider_data' => [
                                 'external_id' => $product->external_id,
                                 'type' => 'like4app',
@@ -213,12 +274,6 @@ class OrderController extends Controller
                             ],
                         ]);
 
-                        $like4AppItems[] = [
-                            'product' => $product,
-                            'quantity' => 1,
-                            'price' => $product->final_price,
-                            'order_item_id' => $orderItem->id,
-                        ];
                     }
                 } else {
                     // المنتجات الداخلية تظل كما هي
@@ -230,24 +285,29 @@ class OrderController extends Controller
                         'quantity' => $quantity,
                         'price_per_unit' => $product->final_price,
                         'total_price' => $itemTotal,
+                        'product_snapshot' => $snapshot,
+                        'fulfillment_source_snapshot' => $source,
+                        'fulfillment_mode_snapshot' => $mode,
+                        'serial_status' => $source === 'local_serials' ? 'pending' : 'not_required',
                         'provider_data' => null,
                     ]);
 
-                    if ($product->stock !== null) {
-                        $product->decrement('stock', $quantity);
-                    }
+                    // Stock is handled by InventoryService (reservation + commit) for auditability.
                 }
             }
+
+            // Preserve historical admin behaviour (manual orders consume physical stock immediately)
+            // but route it through the auditable reservation/commit ledger.
+            $order->load('items.product');
+            $this->localSerialFulfillment->reserveOrder($order);
+            $this->inventory->reserveOrder($order);
+            $this->inventory->commitOrder($order);
 
             DB::commit();
 
             if ($hasLike4AppProduct) {
                 try {
-                    $this->processLike4AppOrder($order, $like4AppItems);
-
-                    $order->update([
-                        'status' => 'completed',
-                    ]);
+                    $this->processLike4AppOrder($order, []);
                 } catch (\Exception $e) {
                     Log::error('Like4App processing failed after local order creation', [
                         'order_id' => $order->id,
@@ -267,6 +327,15 @@ class OrderController extends Controller
                         ->with('warning', 'تم إنشاء الطلب محليًا، لكن حدثت مشكلة أثناء تنفيذ طلب لايك كارد: ' . $e->getMessage());
                 }
             }
+
+            if ($hasLocalSerialProduct) {
+                $localResult = $this->localSerialFulfillment->fulfillOrder($order->fresh(['items.product']), false);
+                if (!($localResult['success'] ?? false)) {
+                    $order->forceFill(['status' => 'processing', 'fulfillment_status' => 'processing'])->save();
+                }
+            }
+
+            $this->localSerialFulfillment->syncOrderStatus($order->fresh(['items.product']));
 
             return redirect()->route('admin.orders.show', $order->id)
                 ->with('success', 'تم إنشاء الطلب بنجاح');
@@ -289,105 +358,10 @@ class OrderController extends Controller
 
     protected function processLike4AppOrder($order, $like4AppItems)
     {
-        $allSerials = [];
-        $providerResponses = [];
-
-        foreach ($like4AppItems as $item) {
-            $product = $item['product'];
-            $quantity = 1;
-
-            $this->logOrderAction($order, 'like4app_request', 'like4app', [
-                'product_id' => $product->id,
-                'order_item_id' => $item['order_item_id'],
-                'external_id' => $product->external_id,
-                'quantity' => $quantity,
-            ]);
-
-            $response = $this->like4AppService->createOrder(
-                $product->external_id,
-                1,
-                (string) ('ORDER_' . $order->id . '_' . $item['order_item_id'] . '_' . time())
-            );
-
-            $providerResponses[] = [
-                'product_id' => $product->id,
-                'order_item_id' => $item['order_item_id'],
-                'product_name' => $product->name,
-                'request' => [
-                    'external_id' => $product->external_id,
-                    'quantity' => 1,
-                ],
-                'response' => $response,
-            ];
-
-            $this->logOrderAction($order, 'like4app_response', 'like4app', [
-                'product_id' => $product->id,
-                'order_item_id' => $item['order_item_id'],
-                'external_id' => $product->external_id,
-                'response' => $response,
-            ]);
-
-            $data = $response['data'] ?? null;
-            $isSuccess = ($response['success'] ?? false) && is_array($data) && (($data['response'] ?? 0) == 1);
-
-            if ($isSuccess) {
-                $serials = $this->like4AppService->parseSerialCodes($data);
-
-                $orderItem = $order->items()->find($item['order_item_id']);
-
-                if ($orderItem) {
-                    $existingProviderData = $orderItem->provider_data;
-
-                    if (is_string($existingProviderData)) {
-                        $decoded = json_decode($existingProviderData, true);
-                        $existingProviderData = is_array($decoded) ? $decoded : [];
-                    }
-
-                    if (!is_array($existingProviderData)) {
-                        $existingProviderData = [];
-                    }
-
-                    $orderItem->update([
-                        'serial_codes' => $serials,
-                        'provider_data' => array_merge($existingProviderData, [
-                            'like4app_response' => $data,
-                            'order_id' => $data['orderId'] ?? null,
-                        ]),
-                    ]);
-                }
-
-                $allSerials = array_merge($allSerials, $serials);
-
-                if (!empty($data['orderId']) && !$order->provider_order_id) {
-                    $order->update([
-                        'provider_order_id' => $data['orderId'],
-                        'provider_response' => $providerResponses,
-                        'serial_codes' => $allSerials,
-                    ]);
-                }
-            } else {
-                $errorMsg =
-                    $response['error']
-                    ?? ($data['message'] ?? null)
-                    ?? ($data['errorCode'] ?? null)
-                    ?? 'فشل الاتصال بخدمة لايك كارد';
-
-                $this->logOrderAction($order, 'error', 'like4app', [
-                    'product_id' => $product->id,
-                    'order_item_id' => $item['order_item_id'],
-                    'error' => $errorMsg,
-                    'response' => $response,
-                ]);
-
-                throw new \Exception("فشل في إنشاء طلب لايك كارد للمنتج {$product->name}: {$errorMsg}");
-            }
+        $result = $this->like4AppFulfillment->fulfillOrder($order, false);
+        if (!($result['success'] ?? false)) {
+            throw new \RuntimeException($result['message'] ?? 'فشل تنفيذ بعض منتجات Like4App');
         }
-
-        $order->update([
-            'provider_response' => $providerResponses,
-            'serial_codes' => $allSerials,
-        ]);
-
         return true;
     }
     /**
@@ -409,7 +383,20 @@ class OrderController extends Controller
 
                 foreach ($serials as &$serial) {
                     if (is_array($serial) && !empty($serial['serial_code'])) {
-                        $serial['voucher_code'] = $this->likeCardService->decryptSerial($serial['serial_code']);
+                        try {
+                            if (($serial['source'] ?? null) === 'local') {
+                                $plain = Crypt::decryptString($serial['serial_code']);
+                                $serial['serial_number'] = $serial['serial_number'] ?: $plain;
+                                $serial['voucher_code'] = $plain;
+                                if (!empty($serial['pin'])) {
+                                    $serial['pin_plain'] = Crypt::decryptString($serial['pin']);
+                                }
+                            } else {
+                                $serial['voucher_code'] = $this->likeCardService->decryptSerial($serial['serial_code']);
+                            }
+                        } catch (\Throwable $e) {
+                            $serial['voucher_code'] = null;
+                        }
                     }
                 }
 
@@ -438,37 +425,147 @@ class OrderController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $order = Order::findOrFail($id);
-
-        $request->validate([
-            'status' => 'required|in:pending,processing,delivered,cancelled',
-            'payment_method' => 'required|in:cash,credit_card,bank_transfer,wallet',
-            'notes' => 'nullable|string',
+        $data = $request->validate([
+            'customer_name' => 'required|string|max:255',
+            'customer_email' => 'nullable|email|max:255',
+            'customer_phone' => 'nullable|string|max:50',
+            'shipping_address' => 'nullable|string|max:5000',
+            'status' => 'required|in:pending,processing,shipped,delivered,completed,cancelled',
+            'payment_method' => 'required|string|max:100',
+            'notes' => 'nullable|string|max:5000',
+            'subtotal' => 'required|numeric|min:0',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'tax_amount' => 'nullable|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
+            'items' => 'nullable|array',
+            'items.*.quantity' => 'required_with:items|integer|min:1|max:1000',
+            'items.*.price_per_unit' => 'required_with:items|numeric|min:0',
+            'items.*.remove' => 'nullable|boolean',
+            'new_product_id' => 'nullable|exists:products,id',
+            'new_quantity' => 'nullable|required_with:new_product_id|integer|min:1|max:1000',
+            'confirm_paid_financial_edit' => 'nullable|accepted',
         ]);
 
-        DB::beginTransaction();
-
         try {
-            $order->update([
-                'status' => $request->status,
-                'payment_method' => $request->payment_method,
-                'notes' => $request->notes,
-            ]);
+            $statusBefore = null;
+            $order = DB::transaction(function () use ($id, $data, $request, &$statusBefore) {
+                $order = Order::with('items')->whereKey($id)->lockForUpdate()->firstOrFail();
+                $statusBefore = $order->status;
+                $before = $order->only([
+                    'customer_name','customer_email','customer_phone','shipping_address','payment_method','notes',
+                    'subtotal','discount_amount','tax_amount','total_amount','status',
+                ]);
+                $paid = $order->status_payment === 'paid' || in_array($order->payment_state, ['paid','partially_refunded'], true);
 
-            $this->logOrderAction($order, 'update_order', $order->provider, [
-                'status' => $request->status,
-                'payment_method' => $request->payment_method
-            ]);
+                // Remove unpaid/unfulfilled items safely and release their reservations.
+                foreach ($order->items as $item) {
+                    $incoming = $data['items'][$item->id] ?? null;
+                    if (!$incoming || empty($incoming['remove'])) continue;
+                    if ($paid || $item->fulfilled_at || !empty($item->serial_codes)) {
+                        throw new \RuntimeException('لا يمكن حذف منتج تم دفعه أو تسليم أكواده من سجل الطلب. استخدم الاسترداد المالي.');
+                    }
+                    $this->inventory->releaseItem($item, 'admin_order_item_removed');
+                    $this->localSerialFulfillment->releaseItem($item, 'admin_order_item_removed');
+                    $item->delete();
+                }
 
-            DB::commit();
+                // Add a new product while the order is still financially unsettled.
+                if (!empty($data['new_product_id'])) {
+                    if ($paid) throw new \RuntimeException('لا يمكن إضافة منتج جديد إلى طلب مدفوع. أنشئ طلباً إضافياً للحفاظ على تطابق الدفعة.');
+                    $product = Product::whereKey($data['new_product_id'])->where('status_id',1)->lockForUpdate()->firstOrFail();
+                    $qty=(int)$data['new_quantity'];
+                    if ((int)$product->max_quantity>0 && $qty>(int)$product->max_quantity) throw new \RuntimeException('الكمية الجديدة أكبر من الحد المسموح لهذا المنتج.');
+                    $source=(string)($product->fulfillment_source?:($product->external_id?'like4app':'none'));
+                    $mode=(string)($product->fulfillment_mode?:($source==='like4app'?'automatic':'manual'));
+                    $newItem=OrderItem::create([
+                        'order_id'=>$order->id,'product_id'=>$product->id,'quantity'=>$qty,'price_per_unit'=>$product->final_price,
+                        'total_price'=>round($qty*(float)$product->final_price,4),
+                        'product_snapshot'=>['id'=>$product->id,'sku'=>$product->sku,'name'=>$product->getTranslations('name'),'description'=>$product->getTranslations('description'),
+                            'subtitle'=>$product->subtitle,'brand'=>$product->brand,'region'=>$product->region,'denomination'=>$product->denomination,
+                            'validity_text'=>$product->validity_text,'image_path'=>$product->image_path,'external_id'=>$product->external_id,
+                            'inventory_type'=>$product->inventory_type,'type'=>$product->type,'instructions'=>$product->instructions,'terms'=>$product->terms,
+                            'fulfillment_source'=>$source,'fulfillment_mode'=>$mode],
+                        'provider_product_id'=>$source==='like4app'?$product->external_id:null,
+                        'fulfillment_source_snapshot'=>$source,'fulfillment_mode_snapshot'=>$mode,
+                        'serial_status'=>$source==='none'?'not_required':'pending',
+                    ]);
+                    $this->localSerialFulfillment->reserveItem($newItem->fresh('product'));
+                    $this->inventory->reserveItem($newItem->fresh('product'));
+                }
 
-            return redirect()->route('admin.orders.show', $order->id)
-                ->with('success', 'تم تحديث الطلب بنجاح');
-        } catch (\Exception $e) {
-            DB::rollBack();
+                $order->unsetRelation('items');
+                $order->load('items');
+                if ($order->items->isEmpty()) throw new \RuntimeException('لا يمكن حفظ طلب بدون أي منتجات.');
 
-            return redirect()->back()
-                ->with('error', 'حدث خطأ أثناء تحديث الطلب: ' . $e->getMessage());
+                $itemSubtotal = 0.0;
+                foreach ($order->items as $item) {
+                    $incoming = $data['items'][$item->id] ?? null;
+                    if (!$incoming) {
+                        $itemSubtotal += (float)$item->total_price;
+                        continue;
+                    }
+                    $newQty = (int)$incoming['quantity'];
+                    $newPrice = round((float)$incoming['price_per_unit'], 4);
+                    $qtyChanged = $newQty !== (int)$item->quantity;
+                    $priceChanged = abs($newPrice - (float)$item->price_per_unit) > 0.0001;
+
+                    if ($qtyChanged && ($paid || $item->fulfilled_at || !empty($item->serial_codes))) {
+                        throw new \RuntimeException('لا يمكن تغيير كمية منتج تم دفعه أو تسليم أكواده. استخدم الاسترداد/التعديل المالي للحفاظ على سجل التسليم.');
+                    }
+                    if ($paid && $priceChanged && !$request->boolean('confirm_paid_financial_edit')) {
+                        throw new \RuntimeException('تعديل سعر طلب مدفوع يحتاج تأكيد التعديل المالي من نفس الشاشة.');
+                    }
+
+                    $oldQty = (int)$item->quantity;
+                    $item->forceFill([
+                        'quantity' => $newQty,
+                        'price_per_unit' => $newPrice,
+                        'total_price' => round($newQty * $newPrice, 4),
+                    ])->save();
+                    if ($qtyChanged) {
+                        $this->inventory->resizeReservation($item, $oldQty, auth('admin')->id());
+                    }
+                    $itemSubtotal += (float)$item->total_price;
+                }
+
+                $financialChanged = abs((float)$order->subtotal - $itemSubtotal) > 0.0001
+                    || abs((float)$order->discount_amount - (float)($data['discount_amount'] ?? 0)) > 0.0001
+                    || abs((float)$order->tax_amount - (float)($data['tax_amount'] ?? 0)) > 0.0001;
+                if ($paid && $financialChanged && !$request->boolean('confirm_paid_financial_edit')) {
+                    throw new \RuntimeException('الطلب مدفوع. فعّل تأكيد التعديل المالي قبل تغيير الأسعار أو الإجماليات.');
+                }
+
+                $discount = round((float)($data['discount_amount'] ?? 0), 4);
+                $tax = round((float)($data['tax_amount'] ?? 0), 4);
+                $shipping = round((float)($order->shipping_amount ?? 0), 4);
+                if ($discount > ($itemSubtotal + $shipping + $tax)) {
+                    throw new \RuntimeException('الخصم أكبر من قيمة الطلب.');
+                }
+                $total = round(max(0, $itemSubtotal + $shipping - $discount + $tax), 4);
+
+                $order->forceFill([
+                    'customer_name'=>$data['customer_name'],'customer_email'=>$data['customer_email'] ?? null,
+                    'customer_phone'=>$data['customer_phone'] ?? null,'shipping_address'=>$data['shipping_address'] ?? null,
+                    'payment_method'=>$data['payment_method'],'notes'=>$data['notes'] ?? null,
+                    'subtotal'=>round($itemSubtotal,4),'discount_amount'=>$discount,'tax_amount'=>$tax,'total_amount'=>$total,
+                ])->save();
+
+                $this->logOrderAction($order, 'update_order_details', $order->provider, [
+                    'before'=>$before,
+                    'after'=>$order->fresh()->only(['customer_name','customer_email','customer_phone','shipping_address','payment_method','notes','subtotal','discount_amount','tax_amount','total_amount']),
+                    'paid_financial_override'=>$paid && $request->boolean('confirm_paid_financial_edit'),
+                ]);
+                return $order->fresh(['items.product']);
+            }, 3);
+
+            if ($data['status'] !== $statusBefore) {
+                $order = $this->lifecycle->transition($order, $data['status'], auth('admin')->id(), $data['notes'] ?? null);
+            }
+
+            return redirect()->route('admin.orders.show', $order->id)->with('success', 'تم تحديث بيانات الطلب وتسجيل التعديل في سجل المراجعة.');
+        } catch (\Throwable $e) {
+            report($e);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
@@ -485,7 +582,7 @@ class OrderController extends Controller
             'response_data' => null,
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
-            'created_by' => Auth::id(),
+            'created_by' => auth('admin')->id(),
         ]);
     }
 
@@ -543,67 +640,24 @@ class OrderController extends Controller
     // }
     public function destroy(Order $order)
     {
-        // إعادة المخزون في حالة الحذف
-        if (in_array($order->status, ['pending', 'processing'])) {
-            foreach ($order->items as $item) {
-                $product = $item->product;
-                if ($product) {
-                    $product->increment('stock', $item->quantity);
-                }
-            }
+        if (in_array($order->status_payment, ['paid','partially_refunded'], true)) {
+            return back()->withErrors(['order' => 'لا يمكن حذف طلب مدفوع. استخدم الاسترداد ثم احتفظ بالطلب كسجل مالي.']);
         }
-
-        $order->delete();
-
-        return redirect()->route('admin.orders.index')
-            ->with('success', 'تم حذف الطلب بنجاح.');
+        try {
+            $this->inventory->releaseOrder($order, 'order_deleted');
+            $this->localSerialFulfillment->releaseOrder($order, 'order_deleted');
+            $order->delete();
+            return redirect()->route('admin.orders.index')->with('success', 'تم حذف الطلب غير المدفوع بنجاح.');
+        } catch (\Throwable $e) { report($e); return back()->withErrors(['order'=>$e->getMessage()]); }
     }
 
     public function updateStatus(Request $request, Order $order)
     {
-        $request->validate([
-            'status' => 'required|string|in:pending,processing,shipped,delivered,cancelled,refunded',
-            'notes' => 'nullable|string',
-        ]);
-
-        $oldStatus = $order->status;
-        $newStatus = $request->status;
-
-        // تحديث الحالة
-        $order->status = $newStatus;
-
-        // تحديث التواريخ
-        if ($newStatus == 'shipped' && $oldStatus != 'shipped') {
-            $order->shipped_at = now();
-        }
-
-        if ($newStatus == 'delivered' && $oldStatus != 'delivered') {
-            $order->delivered_at = now();
-        }
-
-        // إذا تم إلغاء الطلب، إعادة المخزون
-        if ($newStatus == 'cancelled' && !in_array($oldStatus, ['cancelled', 'delivered'])) {
-            foreach ($order->items as $item) {
-                $product = $item->product;
-                if ($product) {
-                    $product->increment('stock', $item->quantity);
-                }
-            }
-        }
-
-        $order->save();
-
-        // إضافة ملاحظة إذا وجدت
-        if ($request->filled('notes')) {
-            // يمكنك إضافة سجل للملاحظات هنا
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'تم تحديث حالة الطلب بنجاح',
-            'status' => $order->status,
-            'status_label' => $order->status_label,
-        ]);
+        $data=$request->validate(['status'=>'required|string|in:pending,processing,shipped,delivered,completed,cancelled','notes'=>'nullable|string|max:1000']);
+        try {
+            $updated=$this->lifecycle->transition($order,$data['status'],auth('admin')->id(),$data['notes']??null);
+            return response()->json(['success'=>true,'message'=>'تم تحديث حالة الطلب بنجاح','status'=>$updated->status,'fulfillment_status'=>$updated->fulfillment_status,'status_label'=>$updated->status_label]);
+        } catch (\Throwable $e) { return response()->json(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function print(Order $order)
@@ -626,19 +680,17 @@ class OrderController extends Controller
         // إحصائيات متقدمة
         $stats = [
             'total_orders' => Order::count(),
-            'total_revenue' => Order::where('status', '!=', 'cancelled')->sum('total_amount'),
-            'average_order_value' => Order::where('status', '!=', 'cancelled')->avg('total_amount') ?? 0,
+            'total_revenue' => PaymentTransaction::whereIn('status', ['paid','finished','confirmed','success'])->sum('original_amount'),
+            'average_order_value' => PaymentTransaction::whereIn('status',['paid','finished','confirmed','success'])->avg('original_amount') ?? 0,
 
             'today_orders' => Order::whereDate('created_at', today())->count(),
-            'today_revenue' => Order::whereDate('created_at', today())->where('status', '!=', 'cancelled')->sum('total_amount'),
+            'today_revenue' => PaymentTransaction::whereDate('paid_at', today())->whereIn('status',['paid','finished','confirmed','success'])->sum('original_amount'),
 
             'weekly_orders' => Order::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-            'weekly_revenue' => Order::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                ->where('status', '!=', 'cancelled')->sum('total_amount'),
+            'weekly_revenue' => PaymentTransaction::whereBetween('paid_at', [now()->startOfWeek(), now()->endOfWeek()])->whereIn('status',['paid','finished','confirmed','success'])->sum('original_amount'),
 
             'monthly_orders' => Order::whereMonth('created_at', now()->month)->count(),
-            'monthly_revenue' => Order::whereMonth('created_at', now()->month)
-                ->where('status', '!=', 'cancelled')->sum('total_amount'),
+            'monthly_revenue' => PaymentTransaction::whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->whereIn('status',['paid','finished','confirmed','success'])->sum('original_amount'),
 
             'status_counts' => Order::select('status', DB::raw('count(*) as count'))
                 ->groupBy('status')

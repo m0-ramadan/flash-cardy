@@ -61,7 +61,6 @@ class SmsaService
             'host' => $this->base_url,
             'content-type' => 'application/json',
         ])->$method($this->base_url . $url, $data);
-            dd($response);
         return $response;
     }
 
@@ -109,11 +108,9 @@ class SmsaService
         $postResponse = $this->send($this->create_shipment_url, 'post', $postData);
 
         if ($postResponse->successful()) {
-            $responseData = $postResponse->json();
-            dd($responseData);
+            return $postResponse->json();
         } else {
-            $errorResponse = $postResponse->json();
-            dd($errorResponse);
+            return ['success' => false, 'status' => $postResponse->status(), 'message' => 'SMSA request failed'];
         }
     }
 }

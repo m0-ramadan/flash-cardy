@@ -24,8 +24,6 @@ class SettingRepository  implements SettingInterface{
 
     public function update($request){
         
-        dd($request);
-
 
             $setting=$this->settingModel::first();
 

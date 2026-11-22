@@ -11,13 +11,22 @@ class Language extends Model
         'name',
         'image_path',
         'is_active',
-
-        'direction', // إضافة: rtl أو ltr
-        'sort_order', // إضافة: ترتيب العرض
+        'direction',
+        'sort_order',
+        'is_default',
     ];
 
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function ($language) {
+            if ($language->code === 'ar' || $language->is_default) {
+                throw new \Exception('لا يمكن حذف اللغة الأساسية أو الافتراضية.');
+            }
+        });
     }
 }

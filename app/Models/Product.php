@@ -47,6 +47,7 @@ class Product extends Model
         'includes_shipping',
         'stock',
         'status_id',
+        'image',
         'image_path',
         'sku',
         'meta_title',
@@ -55,7 +56,22 @@ class Product extends Model
         'sign_currency',
         // 'instructions',
         'terms',
-        'created_by'
+        'created_by',
+        'updated_by',
+        'external_id',
+        'subtitle',
+        'type',
+        'inventory_type',
+        'track_stock',
+        'reserved_stock',
+        'sold_stock',
+        'max_quantity',
+        'instructions',
+        'url',
+        'fulfillment_source',
+        'fulfillment_mode',
+        'allow_serial_backorder'
+        ,'brand','region','denomination','validity_text','is_featured','is_best_seller'
     ];
 
     protected $casts = [
@@ -64,6 +80,13 @@ class Product extends Model
         'includes_shipping' => 'boolean',
         'price' => 'decimal:2',
         'stock' => 'integer',
+        'track_stock' => 'boolean',
+        'reserved_stock' => 'integer',
+        'sold_stock' => 'integer',
+        'max_quantity' => 'integer',
+        'allow_serial_backorder' => 'boolean',
+        'is_featured' => 'boolean',
+        'is_best_seller' => 'boolean',
     ];
 
     // =================================================================
@@ -121,24 +144,51 @@ class Product extends Model
             ->where('type', 'main');
     }
 
+    public function serials()
+    {
+        return $this->hasMany(ProductSerial::class);
+    }
+
+    public function availableSerials()
+    {
+        return $this->hasMany(ProductSerial::class)->usable();
+    }
+
+    public function getAvailableSerialsCountAttribute(): int
+    {
+        return $this->relationLoaded('serials')
+            ? $this->serials->filter(fn ($s) => $s->status === ProductSerial::AVAILABLE && (!$s->expires_at || $s->expires_at->isFuture()))->count()
+            : $this->availableSerials()->count();
+    }
+
     // =================================================================
     // Accessors & Mutators
     // =================================================================
+
+    public function getImageAttribute()
+    {
+        return $this->image_path;
+    }
+
+    public function setImageAttribute($value)
+    {
+        $this->attributes['image_path'] = $value;
+    }
 
     public function getFinalPriceAttribute()
     {
         if ($this->has_discount && $this->discount) {
             if ($this->discount->discount_type === 'percentage') {
-                return $this->price - ($this->price * $this->discount->discount_value / 100);
+                return max(0, (float) $this->price - ((float) $this->price * min(100, max(0, (float) $this->discount->discount_value)) / 100));
             }
-            return $this->price - $this->discount->discount_value;
+            return max(0, (float) $this->price - max(0, (float) $this->discount->discount_value));
         }
         return $this->price;
     }
 
     public function getAverageRatingAttribute()
     {
-        return $this->reviews()->avg('rating') ?? 0;
+        return $this->reviews()->where('is_approved', true)->avg('rating') ?? 0;
     }
 
     /**
@@ -269,10 +319,30 @@ class Product extends Model
     {
         $product = parent::resolveRouteBinding($value, $field);
 
-        if (!$product || $product->trashed() || $product->status_id != 1) {
+        if (!$product || $product->trashed()) {
+            abort(404, 'المنتج غير موجود أو غير متاح');
+        }
+
+        // Dashboard route-model binding must be able to edit disabled/draft products.
+        // Public routes remain protected by the active-product condition.
+        if (!auth('admin')->check() && (int) $product->status_id !== 1) {
             abort(404, 'المنتج غير موجود أو غير متاح');
         }
 
         return $product;
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product) {
+            if (!empty($product->external_id)) {
+                $product->inventory_type = 'digital';
+                $product->track_stock = false;
+                $product->reserved_stock = 0;
+            } elseif (empty($product->inventory_type)) {
+                $product->inventory_type = 'physical';
+                if ($product->track_stock === null) $product->track_stock = true;
+            }
+        });
     }
 }

@@ -41,6 +41,7 @@ class PaymentTransaction extends Model
         'expires_at',
         'paid_at',
         'failed_at',
+        'provider_intention_id','provider_transaction_id','idempotency_key','webhook_processed_at',
     ];
 
     protected $casts = [
@@ -60,6 +61,7 @@ class PaymentTransaction extends Model
         'expires_at' => 'datetime',
         'paid_at' => 'datetime',
         'failed_at' => 'datetime',
+        'webhook_processed_at'=>'datetime',
     ];
 
     public function order()

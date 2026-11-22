@@ -16,9 +16,24 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use App\Services\Wallet\UserWalletService;
+use App\Support\CsvSanitizer;
+use App\Services\Notifications\NotificationService;
 
 class UserController extends Controller
 {
+    public function __construct(private UserWalletService $walletService, private NotificationService $notifications) {}
+
+    public function sendNotify(Request $request)
+    {
+        $data = $request->validate([
+            'user_id'=>'required|exists:users,id', 'title'=>'required|string|max:200', 'message'=>'required|string|max:5000',
+        ]);
+        $user = User::findOrFail($data['user_id']);
+        $this->notifications->user($user, $data['title'], $data['message'], 'admin', ['admin_id'=>auth('admin')->id()], true);
+        return response()->json(['success'=>true,'message'=>'تم إرسال الإشعار.']);
+    }
+
       /**
      * إحصائيات المستخدمين
      */
@@ -304,316 +319,50 @@ return view('Admin.users.index', [
 
     public function createWallet(User $user)
     {
+        if ($user->userWallet) return response()->json(['success'=>false,'message'=>'المستخدم لديه محفظة بالفعل'], 400);
         try {
-            DB::beginTransaction();
-
-            // التحقق من وجود محفظة
-            if ($user->userWallet) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المستخدم لديه محفظة بالفعل'
-                ], 400);
-            }
-
-            // إنشاء المحفظة
-            $wallet = UserWallet::create([
-                'user_id' => $user->id,
-                'balance' => 0,
-                'held_balance' => 0,
-                'currency' => 'SAR',
-                'status' => 'active',
-                'daily_limit' => 10000,
-                'monthly_limit' => 50000
-            ]);
-
-            // إنشاء سجل المحفظة
-            LedgerEntry::create([
-                'wallet_id' => $wallet->id,
-                'wallet_type' => 'user',
-                'owner_type' => 'user',
-                'owner_id' => $user->id,
-                'type' => LedgerEntry::TYPE_ADJUSTMENT,
-                'amount' => 0,
-                'balance_before' => 0,
-                'balance_after' => 0,
-                'description' => 'إنشاء محفظة جديدة',
-                'status' => LedgerEntry::STATUS_COMPLETED,
-                'reference' => 'WALLET_CREATE_' . time(),
-                'metadata' => [
-                    'created_by_admin' => auth()->id(),
-                    'created_at' => now()->toIso8601String()
-                ]
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم إنشاء المحفظة بنجاح',
-                'data' => $wallet
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في إنشاء المحفظة: ' . $e->getMessage()
-            ], 500);
-        }
+            $wallet = DB::transaction(function () use ($user) {
+                $wallet = $user->createUserWallet();
+                LedgerEntry::create([
+                    'wallet_id'=>$wallet->id,'wallet_type'=>'user','owner_type'=>'user','owner_id'=>$user->id,
+                    'type'=>LedgerEntry::TYPE_ADJUSTMENT,'amount'=>0,'balance_before'=>0,'balance_after'=>0,
+                    'description'=>'إنشاء محفظة جديدة','status'=>LedgerEntry::STATUS_COMPLETED,
+                    'reference'=>'WALLET_CREATE_'.$user->id.'_'.now()->format('YmdHis'),
+                    'metadata'=>['created_by_admin'=>auth('admin')->id()],
+                ]);
+                return $wallet;
+            }, 3);
+            return response()->json(['success'=>true,'message'=>'تم إنشاء المحفظة بنجاح','data'=>$wallet]);
+        } catch (\Throwable $e) { report($e); return response()->json(['success'=>false,'message'=>'تعذر إنشاء المحفظة'],500); }
     }
 
     public function deposit(Request $request)
     {
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'amount' => 'required|numeric|min:0.01|max:100000',
-            'payment_method' => 'required|string|in:bank_transfer,credit_card,cash,system,manual',
-            'reference' => 'nullable|string|max:100',
-            'description' => 'nullable|string|max:500'
-        ]);
-
+        $data=$request->validate(['user_id'=>'required|exists:users,id','amount'=>'required|numeric|min:0.01|max:100000','description'=>'nullable|string|max:500','reference'=>'nullable|string|max:100']);
         try {
-            DB::beginTransaction();
-
-            $user = User::findOrFail($validated['user_id']);
-            $wallet = $user->userWallet;
-
-            if (!$wallet) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المستخدم ليس لديه محفظة'
-                ], 400);
-            }
-
-            if ($wallet->status !== 'active') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المحفظة غير نشطة'
-                ], 400);
-            }
-
-            $amount = $validated['amount'];
-            $balanceBefore = $wallet->balance;
-            $balanceAfter = $balanceBefore + $amount;
-
-            // تحديث رصيد المحفظة
-            $wallet->updateBalance($amount, 'increment');
-            $wallet->updateDailyTotals($amount, 'deposit');
-
-            // إنشاء سجل الإيداع
-            $ledgerEntry = LedgerEntry::create([
-                'wallet_id' => $wallet->id,
-                'wallet_type' => 'user',
-                'owner_type' => 'user',
-                'owner_id' => $user->id,
-                'type' => LedgerEntry::TYPE_DEPOSIT,
-                'amount' => $amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $balanceAfter,
-                'available_balance_before' => $wallet->available_balance,
-                'available_balance_after' => $wallet->available_balance + $amount,
-                'payment_method' => $validated['payment_method'],
-                'description' => $validated['description'] ?? 'إيداع رصيد بواسطة المشرف',
-                'status' => LedgerEntry::STATUS_COMPLETED,
-                'reference' => $validated['reference'] ?? 'DEP_' . time() . '_' . rand(1000, 9999),
-                'metadata' => [
-                    'deposited_by_admin' => auth()->id(),
-                    'admin_name' => auth()->user()->name,
-                    'deposit_date' => now()->toIso8601String()
-                ]
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم الإيداع بنجاح',
-                'data' => [
-                    'amount' => number_format($amount, 2),
-                    'new_balance' => number_format($balanceAfter, 2),
-                    'reference' => $ledgerEntry->reference,
-                    'transaction_id' => $ledgerEntry->id
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في عملية الإيداع: ' . $e->getMessage()
-            ], 500);
-        }
+            $user=User::findOrFail($data['user_id']);
+            $entry=$this->walletService->adjust($user,(float)$data['amount'],'credit',$data['description']??'إيداع بواسطة المشرف',auth('admin')->id(),$request->header('Idempotency-Key')?:'admin-deposit-'.$user->id.'-'.($data['reference']??bin2hex(random_bytes(8))));
+            return response()->json(['success'=>true,'message'=>'تم الإيداع بنجاح','data'=>['amount'=>number_format((float)$data['amount'],2),'new_balance'=>number_format((float)$user->userWallet()->value('balance'),2),'reference'=>$entry->reference,'transaction_id'=>$entry->id]]);
+        } catch (\Throwable $e) { report($e); return response()->json(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function withdraw(Request $request)
     {
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'amount' => 'required|numeric|min:0.01|max:100000',
-            'withdrawal_method' => 'required|string|in:bank_transfer,cash,wallet',
-            'withdrawal_details' => 'nullable|string|max:500',
-            'description' => 'nullable|string|max:500'
-        ]);
-
+        $data=$request->validate(['user_id'=>'required|exists:users,id','amount'=>'required|numeric|min:0.01|max:100000','description'=>'nullable|string|max:500','withdrawal_details'=>'nullable|string|max:500']);
         try {
-            DB::beginTransaction();
-
-            $user = User::findOrFail($validated['user_id']);
-            $wallet = $user->userWallet;
-
-            if (!$wallet) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المستخدم ليس لديه محفظة'
-                ], 400);
-            }
-
-            if ($wallet->status !== 'active') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المحفظة غير نشطة'
-                ], 400);
-            }
-
-            $amount = $validated['amount'];
-
-            // التحقق من الرصيد المتاح
-            if ($wallet->available_balance < $amount) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'الرصيد غير كافي للسحب'
-                ], 400);
-            }
-
-            // التحقق من الحد اليومي
-            if (!$wallet->canWithdrawToday($amount)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'تجاوز الحد اليومي للسحب'
-                ], 400);
-            }
-
-            $balanceBefore = $wallet->balance;
-            $balanceAfter = $balanceBefore - $amount;
-
-            // تحديث رصيد المحفظة
-            $wallet->updateBalance($amount, 'decrement');
-            $wallet->updateDailyTotals($amount, 'withdrawal');
-
-            // إنشاء سجل السحب
-            $ledgerEntry = LedgerEntry::create([
-                'wallet_id' => $wallet->id,
-                'wallet_type' => 'user',
-                'owner_type' => 'user',
-                'owner_id' => $user->id,
-                'type' => LedgerEntry::TYPE_WITHDRAWAL,
-                'amount' => $amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $balanceAfter,
-                'available_balance_before' => $wallet->available_balance,
-                'available_balance_after' => $wallet->available_balance - $amount,
-                'payment_method' => $validated['withdrawal_method'],
-                'description' => $validated['description'] ?? 'سحب رصيد بواسطة المشرف',
-                'status' => LedgerEntry::STATUS_COMPLETED,
-                'reference' => 'WTH_' . time() . '_' . rand(1000, 9999),
-                'metadata' => [
-                    'withdrawn_by_admin' => auth()->id(),
-                    'admin_name' => auth()->user()->name,
-                    'withdrawal_date' => now()->toIso8601String(),
-                    'withdrawal_details' => $validated['withdrawal_details']
-                ]
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم السحب بنجاح',
-                'data' => [
-                    'amount' => number_format($amount, 2),
-                    'new_balance' => number_format($balanceAfter, 2),
-                    'reference' => $ledgerEntry->reference,
-                    'transaction_id' => $ledgerEntry->id
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في عملية السحب: ' . $e->getMessage()
-            ], 500);
-        }
+            $user=User::findOrFail($data['user_id']);
+            $entry=$this->walletService->adjust($user,(float)$data['amount'],'debit',$data['description']??'سحب بواسطة المشرف',auth('admin')->id(),$request->header('Idempotency-Key')?:'admin-withdraw-'.$user->id.'-'.bin2hex(random_bytes(8)));
+            return response()->json(['success'=>true,'message'=>'تم السحب بنجاح','data'=>['amount'=>number_format((float)$data['amount'],2),'new_balance'=>number_format((float)$user->userWallet()->value('balance'),2),'reference'=>$entry->reference,'transaction_id'=>$entry->id]]);
+        } catch (\Throwable $e) { report($e); return response()->json(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function quickDeposit(Request $request, User $user)
     {
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:1|max:10000',
-            'description' => 'nullable|string|max:255'
-        ]);
-
+        $data=$request->validate(['amount'=>'required|numeric|min:1|max:10000','description'=>'nullable|string|max:255']);
         try {
-            DB::beginTransaction();
-
-            $wallet = $user->userWallet;
-
-            if (!$wallet) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'المستخدم ليس لديه محفظة'
-                ], 400);
-            }
-
-            $amount = $validated['amount'];
-            $balanceBefore = $wallet->balance;
-            $balanceAfter = $balanceBefore + $amount;
-
-            // تحديث رصيد المحفظة
-            $wallet->updateBalance($amount, 'increment');
-            $wallet->updateDailyTotals($amount, 'deposit');
-
-            // إنشاء سجل الإيداع
-            LedgerEntry::create([
-                'wallet_id' => $wallet->id,
-                'wallet_type' => 'user',
-                'owner_type' => 'user',
-                'owner_id' => $user->id,
-                'type' => LedgerEntry::TYPE_DEPOSIT,
-                'amount' => $amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $balanceAfter,
-                'description' => $validated['description'] ?? 'إيداع سريع بواسطة المشرف',
-                'status' => LedgerEntry::STATUS_COMPLETED,
-                'reference' => 'QDEP_' . time() . '_' . rand(1000, 9999),
-                'metadata' => [
-                    'quick_deposit' => true,
-                    'deposited_by_admin' => auth()->id()
-                ]
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم الإيداع السريع بنجاح',
-                'data' => [
-                    'amount' => number_format($amount, 2),
-                    'new_balance' => number_format($balanceAfter, 2)
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'فشل في عملية الإيداع: ' . $e->getMessage()
-            ], 500);
-        }
+            $entry=$this->walletService->adjust($user,(float)$data['amount'],'credit',$data['description']??'إيداع سريع بواسطة المشرف',auth('admin')->id(),$request->header('Idempotency-Key')?:'admin-quick-deposit-'.$user->id.'-'.bin2hex(random_bytes(8)));
+            return response()->json(['success'=>true,'message'=>'تم الإيداع السريع بنجاح','data'=>['amount'=>number_format((float)$data['amount'],2),'new_balance'=>number_format((float)$user->userWallet()->value('balance'),2),'reference'=>$entry->reference]]);
+        } catch (\Throwable $e) { report($e); return response()->json(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function getTransactions(User $user)
@@ -683,7 +432,7 @@ return view('Admin.users.index', [
 
             // كتابة البيانات
             foreach ($transactions as $transaction) {
-                fputcsv($file, [
+                fputcsv($file, array_map([CsvSanitizer::class, 'cell'], [
                     $transaction->id,
                     $this->getTypeText($transaction->type),
                     $transaction->amount,
@@ -693,7 +442,7 @@ return view('Admin.users.index', [
                     $transaction->created_at->format('Y-m-d H:i:s'),
                     $transaction->balance_before,
                     $transaction->balance_after
-                ]);
+                ]));
             }
 
             fclose($file);
@@ -764,7 +513,7 @@ return view('Admin.users.index', [
 
     public function show(User $user)
     {
-
+        $user->load(['userWallet','orders'=>fn($q)=>$q->latest()->limit(20),'reviews.product','favourites.product']);
         return view('Admin.users.show', compact('user'));
     }
 
@@ -816,33 +565,18 @@ return view('Admin.users.index', [
 
     public function destroy(User $user)
     {
-        // حذف الصورة إذا وجدت
-        if ($user->image) {
-            Storage::disk('public')->delete($user->image);
-        }
-
-        // حذف المحفظة المرتبطة
-        if ($user->userWallet) {
-            $user->userWallet->delete();
-        }
-
-        $user->delete();
-
-        return redirect()->route('admin.users.index')
-            ->with('success', 'تم حذف المستخدم والمحفظة المرتبطة به بنجاح.');
+        // Users with orders/wallet history are retained for financial/audit integrity.
+        $user->forceFill(['is_active'=>false,'deactivated_at'=>now()])->save();
+        $user->tokens()->delete();
+        return redirect()->route('admin.users.index')->with('success','تم تعطيل المستخدم وسحب جلساته مع الاحتفاظ بالسجل المالي.');
     }
 
     public function toggleStatus(User $user)
     {
-        if (isset($user->is_active)) {
-            $user->update(['is_active' => !$user->is_active]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'تم تغيير الحالة بنجاح',
-            'is_active' => $user->is_active ?? null
-        ]);
+        $new=!$user->is_active;
+        $user->forceFill(['is_active'=>$new,'deactivated_at'=>$new?null:now()])->save();
+        if(!$new) $user->tokens()->delete();
+        return response()->json(['success'=>true,'message'=>$new?'تم تفعيل المستخدم':'تم تعطيل المستخدم وسحب الجلسات','is_active'=>$new]);
     }
 
     public function orders(User $user)

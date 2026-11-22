@@ -125,15 +125,15 @@ public function create()
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:admins,email',
             'phone' => 'nullable|string|unique:admins,phone',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|exists:roles,id',
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::min(8)->letters()->numbers()],
+            'role' => ['required', \Illuminate\Validation\Rule::exists('roles', 'id')->where('guard_name', 'admin')],
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'is_active' => 'boolean'
         ]);
 
         $data = [
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => mb_strtolower($request->email),
             'phone' => $request->phone,
             'password' => Hash::make($request->password),
             'is_active' => $request->is_active ?? true,
@@ -148,7 +148,7 @@ public function create()
         $admin = Admin::create($data);
         
         // إضافة الدور
-        $role = Role::findById($request->role);
+        $role = Role::where('guard_name', 'admin')->findOrFail($request->role);
         $admin->assignRole($role);
 
         return redirect()->route('admin.admins.index')
@@ -187,16 +187,26 @@ public function create()
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:admins,email,' . $admin->id,
             'phone' => 'nullable|string|unique:admins,phone,' . $admin->id,
-            'role' => 'required|exists:roles,id',
+            'role' => ['required', \Illuminate\Validation\Rule::exists('roles', 'id')->where('guard_name', 'admin')],
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'is_active' => 'boolean'
         ]);
 
+        $newRole = Role::where('guard_name', 'admin')->findOrFail($request->role);
+        $requestedActive = $request->boolean('is_active', true);
+        // Protect the last active super admin from an accidental lockout.
+        if ($admin->isSuperAdmin() && (!$requestedActive || $newRole->name !== 'super_admin')) {
+            $otherActiveSuperAdmins = Admin::where('id', '<>', $admin->id)->where('is_active', true)->role('super_admin')->count();
+            if ($otherActiveSuperAdmins === 0) {
+                return back()->withErrors(['role' => 'لا يمكن إزالة أو تعطيل آخر Super Admin نشط.'])->withInput();
+            }
+        }
+
         $data = [
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => mb_strtolower($request->email),
             'phone' => $request->phone,
-            'is_active' => $request->is_active ?? true,
+            'is_active' => $requestedActive,
         ];
 
         // تحديث الصورة
@@ -213,7 +223,7 @@ public function create()
         $admin->update($data);
         
         // تحديث الدور
-        $admin->syncRoles([$request->role]);
+        $admin->syncRoles([$newRole]);
 
         return redirect()->route('admin.admins.index')
                         ->with('success', 'تم تحديث بيانات المشرف بنجاح');
@@ -225,7 +235,7 @@ public function create()
     public function destroy(Admin $admin)
     {
         // لا يمكن حذف نفسه
-        if ($admin->id === auth()->id()) {
+        if ($admin->id === auth('admin')->id()) {
             return response()->json([
                 'success' => false,
                 'message' => 'لا يمكنك حذف حسابك الخاص'
@@ -259,7 +269,7 @@ public function create()
     public function toggleStatus(Admin $admin)
     {
         // لا يمكن تغيير حالة نفسه
-        if ($admin->id === auth()->id()) {
+        if ($admin->id === auth('admin')->id()) {
             return response()->json([
                 'success' => false,
                 'message' => 'لا يمكنك تغيير حالة حسابك الخاص'
@@ -294,7 +304,7 @@ public function create()
     public function resetPassword(Request $request, Admin $admin)
     {
         $request->validate([
-            'password' => 'required|string|min:8|confirmed',
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::min(8)->letters()->numbers()],
         ]);
 
         $admin->password = Hash::make($request->password);
@@ -317,7 +327,7 @@ public function create()
         ]);
 
         // لا يمكن حذف نفسه
-        if (in_array(auth()->id(), $request->ids)) {
+        if (in_array(auth('admin')->id(), $request->ids)) {
             return response()->json([
                 'success' => false,
                 'message' => 'لا يمكنك حذف حسابك الخاص'
@@ -356,7 +366,7 @@ public function create()
         ]);
 
         // لا يمكن تغيير حالة نفسه
-        if (in_array(auth()->id(), $request->ids)) {
+        if (in_array(auth('admin')->id(), $request->ids)) {
             return response()->json([
                 'success' => false,
                 'message' => 'لا يمكنك تغيير حالة حسابك الخاص'
@@ -365,7 +375,7 @@ public function create()
 
         $status = $request->status === 'active';
         $count = Admin::whereIn('id', $request->ids)
-                     ->where('id', '!=', auth()->id())
+                     ->where('id', '!=', auth('admin')->id())
                      ->whereDoesntHave('roles', function($q) {
                          $q->where('name', 'super_admin');
                      })

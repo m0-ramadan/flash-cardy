@@ -6,26 +6,20 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class LoginRequest extends FormRequest
 {
-    public function authorize(): bool
-    {
-        return true; 
-    }
+    public function authorize(): bool { return true; }
 
     public function rules(): array
     {
         return [
-            'email'    => 'required|email',
-            'password' => 'nullable|min:6',
+            'email' => ['required', 'email:rfc'],
+            'password' => ['required', 'string'],
         ];
     }
 
-    public function messages(): array
+    protected function prepareForValidation(): void
     {
-        return [
-            'email.required' => 'البريد الإلكتروني مطلوب.',
-            'email.email'    => 'يرجى إدخال بريد إلكتروني صالح.',
-
-            'password.min'   => 'كلمة المرور يجب ألا تقل عن 6 أحرف.',
-        ];
+        if ($this->has('email')) {
+            $this->merge(['email' => mb_strtolower(trim((string) $this->email))]);
+        }
     }
 }

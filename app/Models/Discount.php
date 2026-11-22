@@ -6,7 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Discount extends Model
 {
-    protected $fillable = ['product_id', 'discount_value', 'discount_type'];
+    protected $fillable = [
+        'product_id',
+        'discount_value',
+        'discount_type',
+        'is_active',
+        'starts_at',
+        'ends_at',
+    ];
 
     protected $casts = [
         'discount_value' => 'decimal:2',

@@ -25,6 +25,8 @@ class OrderItem extends Model
         'voucher_code',
         'provider_data', // Store like4app provider data
         'serial_codes', // Individual serial codes for this item
+        'product_snapshot','customization_snapshot','provider_product_id','provider_reference',
+        'provider_transaction_id','provider_status','fulfillment_source_snapshot','fulfillment_mode_snapshot','serial_status','fulfilled_at','failure_reason','refunded_quantity','design_file_id','pricing_snapshot',
     ];
 
     protected $casts = [
@@ -36,6 +38,7 @@ class OrderItem extends Model
         'is_sample' => 'boolean',
         'provider_data' => 'array',
         'serial_codes' => 'array',
+        'product_snapshot'=>'array','customization_snapshot'=>'array','pricing_snapshot'=>'array','fulfilled_at'=>'datetime','refunded_quantity'=>'integer',
     ];
 
     public function order()
@@ -59,4 +62,8 @@ class OrderItem extends Model
     {
         return $this->product && $this->product->external_id ? 'like4app' : 'internal';
     }
+
+    public function assignedSerials(){ return $this->hasMany(ProductSerial::class); }
+    public function like4AppPurchases(){ return $this->hasMany(Like4AppPurchase::class); }
+    public function designFile(){ return $this->belongsTo(UploadedFile::class, 'design_file_id'); }
 }

@@ -2,47 +2,48 @@
 
 namespace App\Http\Controllers\Api\Website;
 
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Website\StoreArticleCommentRequest;
 use App\Models\Article;
-use Illuminate\Http\Request;
 use App\Models\ArticleComment;
 use App\Traits\ApiResponseTrait;
-use App\Http\Controllers\Controller;
-use App\Http\Resources\Website\ArticleCommentResource;
-use App\Http\Requests\Website\StoreArticleCommentRequest;
-
 
 class ArticleCommentController extends Controller
 {
     use ApiResponseTrait;
 
-    // عرض تعليقات مقالة معينة
     public function index($articleId)
     {
-        $comments = ArticleComment::with(['user', 'replies.user'])
-            ->where('article_id', $articleId)
-            ->whereNull('parent_id')
-            ->approved()
-            ->latest()
-            ->get();
-
-        return $this->success(ArticleCommentResource::collection($comments), 'تم جلب التعليقات بنجاح');
+        if (!Article::query()->whereKey($articleId)->active()->published()->exists()) {
+            return $this->error('المقال غير موجود', 404);
+        }
+        $comments = ArticleComment::query()->approved()->where('article_id', $articleId)
+            ->whereNull('parent_id')->with(['user','replies.user'])->oldest()->paginate(30);
+        return $this->success($comments, 'تم جلب التعليقات بنجاح');
     }
 
-    // إضافة تعليق جديد
     public function store(StoreArticleCommentRequest $request)
     {
-        $article = Article::findOrFail($request->article_id);
-        $user = auth()->user();
+        $article = Article::query()->whereKey($request->article_id)->active()->published()->first();
+        if (!$article) return $this->error('المقال غير موجود أو غير منشور', 404);
+
+        if ($request->filled('parent_id')) {
+            $validParent = ArticleComment::query()->whereKey($request->parent_id)
+                ->where('article_id', $article->id)->approved()->exists();
+            if (!$validParent) return $this->error('التعليق الأب غير صالح لهذا المقال', 422);
+        }
+
+        $user = $request->user();
         $comment = ArticleComment::create([
             'article_id' => $article->id,
             'user_id' => $user?->id,
-            'parent_id' => $request->parent_id,
-            'name' => $request->name ??  ($user ? $user->name : null),
-            'email' => $request->email ?? ($user ? $user->email : null),
-            'content' => $request->content,
-            'is_approved' => auth()->guard('web')->check() // إذا كان مسجل دخول يوافق تلقائياً
+            'parent_id' => $request->input('parent_id'),
+            'name' => $user?->name ?? trim(strip_tags((string) $request->name)),
+            'email' => $user?->email ?? strtolower(trim((string) $request->email)),
+            'content' => trim(strip_tags((string) $request->content)),
+            'is_approved' => false,
         ]);
 
-        return $this->success(new ArticleCommentResource($comment), 'تم إضافة التعليق بنجاح وسيظهر بعد المراجعة');
+        return $this->success($comment, 'تم استلام التعليق وسيظهر بعد المراجعة', 201);
     }
 }

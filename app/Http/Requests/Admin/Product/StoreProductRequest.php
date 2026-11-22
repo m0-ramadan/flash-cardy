@@ -60,11 +60,36 @@ class StoreProductRequest extends FormRequest
             'stock' => 'required|integer|min:0',
             'status_id' => 'required|in:1,2,3',
             'sku' => 'nullable|string|max:100|unique:products,sku,' . $this->route('id'),
+            'sign_currency' => 'nullable|string|max:20',
+            'subtitle' => 'nullable|string|max:255',
+            'brand' => 'nullable|string|max:150',
+            'region' => 'nullable|string|max:150',
+            'denomination' => 'nullable|string|max:100',
+            'validity_text' => 'nullable|string|max:255',
+            'is_featured' => 'nullable|boolean',
+            'is_best_seller' => 'nullable|boolean',
+            'type' => 'nullable|in:product,subscription,gift_card,digital_code,service',
+            'inventory_type' => 'nullable|in:physical,digital,service',
+            'track_stock' => 'nullable|boolean',
+            'max_quantity' => 'nullable|integer|min:0|max:100000',
+            'instructions' => 'nullable|string|max:20000',
+            'terms' => 'nullable|string|max:20000',
+            'url' => 'nullable|url|max:500',
+            'external_id' => 'nullable|string|max:255',
+            'fulfillment_source' => 'nullable|in:none,local_serials,like4app',
+            'fulfillment_mode' => 'nullable|in:automatic,manual',
+            'allow_serial_backorder' => 'nullable|boolean',
+            'includes_shipping' => 'nullable|boolean',
+            'serials' => 'nullable|array|max:500',
+            'serials.*.code' => 'required_with:serials|string|max:1000|distinct',
+            'serials.*.pin' => 'nullable|string|max:500',
+            'serials.*.expires_at' => 'nullable|date',
+            'serials.*.notes' => 'nullable|string|max:1000',
 
             // =============================================================
             // الصور
             // =============================================================
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'image' => ($this->isMethod('post') && !$this->route('id') ? 'required' : 'nullable') . '|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'delete_image' => 'nullable|boolean',
 
             'additional_images' => 'nullable|array',
@@ -82,7 +107,6 @@ class StoreProductRequest extends FormRequest
             // خيارات إضافية
             // =============================================================
             'includes_tax' => 'nullable|boolean',
-            'includes_shipping' => 'nullable|boolean',
 
             // =============================================================
             // العروض
@@ -108,6 +132,26 @@ class StoreProductRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            if ($this->boolean('has_discount')) {
+                $type = $this->input('discount_type');
+                $value = (float) $this->input('discount_value', 0);
+                $price = (float) $this->input('price', 0);
+                if ($type === 'percentage' && $value > 100) {
+                    $validator->errors()->add('discount_value', 'نسبة الخصم لا يمكن أن تتجاوز 100%.');
+                }
+                if ($type === 'fixed' && $value > $price) {
+                    $validator->errors()->add('discount_value', 'الخصم الثابت لا يمكن أن يكون أكبر من سعر المنتج.');
+                }
+            }
+            if ($this->input('fulfillment_source') === 'like4app' && !$this->filled('external_id')) {
+                $validator->errors()->add('external_id', 'Provider Product ID مطلوب عند اختيار Like4App.');
+            }
+        });
     }
 
     /**
@@ -180,8 +224,12 @@ class StoreProductRequest extends FormRequest
         $this->merge([
             'has_discount' => $this->boolean('has_discount'),
             'includes_tax' => $this->boolean('includes_tax'),
-            'includes_shipping' => $this->boolean('includes_shipping'),
             'delete_image' => $this->boolean('delete_image'),
+            'track_stock' => $this->boolean('track_stock'),
+            'allow_serial_backorder' => $this->boolean('allow_serial_backorder'),
+            'includes_shipping' => $this->boolean('includes_shipping'),
+            'is_featured' => $this->boolean('is_featured'),
+            'is_best_seller' => $this->boolean('is_best_seller'),
         ]);
 
         // التأكد من أن الحقول المصفوفية موجودة كصفيفات حتى لو كانت فارغة
@@ -191,6 +239,14 @@ class StoreProductRequest extends FormRequest
             if ($this->has($field) && !is_array($this->get($field))) {
                 $this->merge([$field => []]);
             }
+        }
+
+        // Empty repeater rows from the dashboard are UI placeholders, not serial records.
+        if (is_array($this->input('serials'))) {
+            $serials = array_values(array_filter($this->input('serials'), function ($row) {
+                return is_array($row) && trim((string)($row['code'] ?? '')) !== '';
+            }));
+            $this->merge(['serials' => $serials]);
         }
     }
 
@@ -217,7 +273,6 @@ class StoreProductRequest extends FormRequest
             'discount_type' => 'نوع الخصم',
             'discount_value' => 'قيمة الخصم',
             'includes_tax' => 'يشمل الضريبة',
-            // 'includes_shipping' => 'يشمل الشحن',
             'offers' => 'العروض',
             'text_ads' => 'النصوص الإعلانية',
         ];

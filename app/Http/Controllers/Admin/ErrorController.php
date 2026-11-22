@@ -136,13 +136,12 @@ class ErrorController extends Controller
      */
     public function download($filename)
     {
-        $logPath = storage_path('logs/' . $filename);
-
-        if (!File::exists($logPath)) {
-            return back()->with('error', 'ملف السجل غير موجود');
-        }
-
-        return response()->download($logPath, 'error_log_' . date('Y-m-d') . '.log');
+        $safeName = basename((string) $filename);
+        abort_unless($safeName === $filename && preg_match('/^[A-Za-z0-9._-]+\.log$/', $safeName), 404);
+        $base = realpath(storage_path('logs'));
+        $real = realpath(storage_path('logs/'.$safeName));
+        abort_unless($base && $real && str_starts_with($real, $base.DIRECTORY_SEPARATOR) && File::isFile($real), 404);
+        return response()->download($real, $safeName, ['Content-Type' => 'text/plain; charset=UTF-8']);
     }
 
     /**
