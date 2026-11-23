@@ -1,10 +1,5 @@
 @extends('Admin.auth.layouts.master')
 
-@section('styles')
-    <!-- إضافة دعم RTL للـ Bootstrap إذا لم يكن موجوداً بالفعل -->
-    <link rel="stylesheet" href="{{ asset('dashboard/assets/css/bootstrap-rtl.min.css') }}">
-@endsection
-
 @section('content')
     <div class="authentication-wrapper authentication-cover authentication-bg" dir="rtl">
         <div class="authentication-inner row">

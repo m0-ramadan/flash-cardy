@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ar" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" dir="rtl"
-    data-theme="theme-default" data-assets-path="#"
+    data-theme="theme-default" data-assets-path="{{ asset('dashboard/assets') }}/"
     data-template="vertical-menu-template-no-customizer">
 
 <head>

@@ -108,3 +108,40 @@
     background-color: #353952 !important;
     color: #fff !important;
 }
+
+/* Sidebar Menu, Navbar, Footer & Pagination in Dark Mode */
+.dark-style .bg-menu-theme {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+}
+.dark-style .bg-menu-theme .menu-link,
+.dark-style .bg-menu-theme .menu-header {
+    color: #b6bee3 !important;
+}
+.dark-style .bg-menu-theme .menu-item.active > .menu-link:not(.menu-toggle) {
+    background: linear-gradient(72.47deg, #7367f0 22.16%, rgba(115, 103, 240, 0.7) 76.47%) !important;
+    color: #fff !important;
+}
+.dark-style .layout-navbar {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+}
+.dark-style .content-footer {
+    background-color: #2f3349 !important;
+    color: #b6bee3 !important;
+}
+.dark-style .pagination .page-link {
+    background-color: #2f3349 !important;
+    border-color: #434968 !important;
+    color: #b6bee3 !important;
+}
+.dark-style .pagination .page-item.active .page-link {
+    background-color: #7367f0 !important;
+    border-color: #7367f0 !important;
+    color: #fff !important;
+}
+.dark-style .pagination .page-item.disabled .page-link {
+    background-color: #25293c !important;
+    border-color: #434968 !important;
+    color: #7983bb !important;
+}

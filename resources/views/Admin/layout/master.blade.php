@@ -12,8 +12,8 @@
     <script>
         (function() {
             var templateName = 'vertical-menu-template-no-customizer';
-            var style = localStorage.getItem('templateCustomizer-' + templateName + '--Style') || 'dark';
-            if (style === 'dark' || (style === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            var style = localStorage.getItem('templateCustomizer-' + templateName + '--Style');
+            if (style === 'dark') {
                 document.documentElement.classList.remove('light-style');
                 document.documentElement.classList.add('dark-style');
             } else if (style === 'light') {
