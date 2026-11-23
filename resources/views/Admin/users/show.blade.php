@@ -615,9 +615,14 @@
             color: #721c24;
         }
 
-        .order-status.shipped {
-            background: #d1ecf1;
-            color: #0c5460;
+        .order-status.paid {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .order-status.refunded {
+            background: #e2e3e5;
+            color: #383d41;
         }
 
         .product-image-small {
@@ -1097,15 +1102,16 @@
                                                     @php
                                                         $statusClass = match ($order->status) {
                                                             'pending' => 'pending',
+                                                            'paid' => 'paid',
                                                             'processing' => 'processing',
                                                             'completed' => 'completed',
                                                             'cancelled' => 'cancelled',
-                                                            'shipped' => 'shipped',
+                                                            'refunded' => 'refunded',
                                                             default => 'pending',
                                                         };
                                                     @endphp
                                                     <span class="order-status {{ $statusClass }}">
-                                                        {{ $order->status_text ?? $order->status }}
+                                                        {{ $order->status_text ?? $order->status_label }}
                                                     </span>
                                                 </td>
                                                 <td>

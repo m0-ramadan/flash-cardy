@@ -539,20 +539,14 @@
                         @php
                             $statusColors = [
                                 'pending' => '#ffc107',
-                                'processing' => '#0d6efd',
-                                'shipped' => '#0dcaf0',
-                                'delivered' => '#198754',
+                                'paid' => '#0d6efd',
+                                'processing' => '#0dcaf0',
+                                'completed' => '#198754',
                                 'cancelled' => '#dc3545',
                                 'refunded' => '#6c757d',
                             ];
 
-                            $statusLabels = [
-                                'pending' => 'قيد الانتظار',
-                                'processing' => 'تحت المعالجة',
-                                'delivered' => 'تم التسليم',
-                                'cancelled' => 'ملغي',
-                                'refunded' => 'مسترجع',
-                            ];
+                            $statusLabels = \App\Models\Order::STATUS_LABELS;
                         @endphp
 
                         @foreach ($stats['status_counts'] as $status => $count)
@@ -571,11 +565,11 @@
                                                     <i class="fas fa-cog"></i>
                                                 @break
 
-                                                @case('shipped')
-                                                    <i class="fas fa-truck"></i>
+                                                @case('paid')
+                                                    <i class="fas fa-money-bill-wave"></i>
                                                 @break
 
-                                                @case('delivered')
+                                                @case('completed')
                                                     <i class="fas fa-check-circle"></i>
                                                 @break
 
@@ -650,22 +644,10 @@
         function loadCharts() {
             // بيانات مخطط الحالة
             const statusData = {
-                labels: ['قيد الانتظار', 'تحت المعالجة','تم التسليم', 'ملغي'],
+                labels: @json(array_values(\App\Models\Order::STATUS_LABELS)),
                 datasets: [{
-                    data: [
-                        {{ $stats['status_counts']['pending'] ?? 0 }},
-                        {{ $stats['status_counts']['processing'] ?? 0 }},
-                        {{ $stats['status_counts']['shipped'] ?? 0 }},
-                        {{ $stats['status_counts']['delivered'] ?? 0 }},
-                        {{ $stats['status_counts']['cancelled'] ?? 0 }}
-                    ],
-                    backgroundColor: [
-                        '#ffc107',
-                        '#0d6efd',
-                        '#0dcaf0',
-                        '#198754',
-                        '#dc3545'
-                    ],
+                    data: @json(array_values(array_map(fn ($s) => (int) ($stats['status_counts'][$s] ?? 0), array_keys(\App\Models\Order::STATUS_LABELS)))),
+                    backgroundColor: ['#ffc107', '#0d6efd', '#0dcaf0', '#198754', '#dc3545', '#6c757d'],
                     borderWidth: 1
                 }]
             };

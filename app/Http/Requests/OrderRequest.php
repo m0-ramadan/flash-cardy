@@ -28,7 +28,7 @@ class OrderRequest extends FormRequest
 
             // Order details
             'payment_method' => 'required|in:cash,credit_card,bank_transfer,wallet',
-            'status' => 'required|in:pending,processing,delivered,cancelled',
+            'status' => 'required|in:pending,paid,processing,completed,cancelled',
             'notes' => 'nullable|string',
 
             // Optional fields

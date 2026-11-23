@@ -71,14 +71,14 @@
             color: #004085;
         }
 
-        .status-shipped {
-            background: #d4edda;
-            color: #155724;
+        .status-paid {
+            background: #cce5ff;
+            color: #004085;
         }
 
-        .status-delivered {
-            background: #d1ecf1;
-            color: #0c5460;
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
         }
 
         .status-cancelled {
@@ -322,14 +322,14 @@
 
             <div class="col-lg-3 col-md-6 mb-4" bis_skin_checked="1">
                 @php
-                    $deliveredOrders = $orders->where('status', 'delivered')->count();
+                    $completedOrders = $orders->where('status', 'completed')->count();
                 @endphp
                 <div class="stats-card" bis_skin_checked="1">
                     <div class="stats-icon icon-delivered" bis_skin_checked="1">
                         <i class="fas fa-check-circle"></i>
                     </div>
                     <div class="stats-number" bis_skin_checked="1">
-                        {{ $deliveredOrders }}
+                        {{ $completedOrders }}
                     </div>
                     <div class="stats-label" bis_skin_checked="1">طلبات مكتملة</div>
                 </div>

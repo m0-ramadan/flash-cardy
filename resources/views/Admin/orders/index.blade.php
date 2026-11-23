@@ -68,8 +68,8 @@
         <div class="col-sm-6 col-xl-2">
             <div class="card shadow-sm border-0">
                 <div class="card-body p-3">
-                    <span class="text-success d-block small mb-1"><i class="ti ti-check me-1"></i> مكتملة / مسلّمة</span>
-                    <h5 class="mb-0 fw-bold text-success">{{ number_format(($stats['delivered'] ?? 0) + ($stats['completed'] ?? 0)) }}</h5>
+                    <span class="text-success d-block small mb-1"><i class="ti ti-cash-banknote me-1"></i> تم الدفع</span>
+                    <h5 class="mb-0 fw-bold text-success">{{ number_format($stats['paid'] ?? 0) }}</h5>
                 </div>
             </div>
         </div>
@@ -106,12 +106,9 @@
                     <label class="form-label" for="status">حالة الطلب</label>
                     <select class="form-select" id="status" name="status">
                         <option value="">جميع الحالات</option>
-                        <option value="pending" @selected(request('status') === 'pending')>قيد الانتظار (Pending)</option>
-                        <option value="processing" @selected(request('status') === 'processing')>جاري المعالجة (Processing)</option>
-                        <option value="shipped" @selected(request('status') === 'shipped')>تم الشحن (Shipped)</option>
-                        <option value="delivered" @selected(request('status') === 'delivered')>تم التسليم (Delivered)</option>
-                        <option value="completed" @selected(request('status') === 'completed')>مكتمل (Completed)</option>
-                        <option value="cancelled" @selected(request('status') === 'cancelled')>ملغي (Cancelled)</option>
+                        @foreach (\App\Models\Order::STATUS_LABELS as $value => $label)
+                            <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -158,22 +155,8 @@
                 <tbody>
                     @forelse ($orders as $order)
                         @php
-                            $statusBadge = match($order->status) {
-                                'pending' => 'bg-label-warning',
-                                'processing' => 'bg-label-info',
-                                'shipped', 'delivered', 'completed' => 'bg-label-success',
-                                'cancelled' => 'bg-label-danger',
-                                default => 'bg-label-secondary'
-                            };
-                            $statusName = match($order->status) {
-                                'pending' => 'قيد الانتظار',
-                                'processing' => 'جاري التجهيز',
-                                'shipped' => 'تم الشحن',
-                                'delivered' => 'تم التسليم',
-                                'completed' => 'مكتمل',
-                                'cancelled' => 'ملغي',
-                                default => $order->status
-                            };
+                            $statusBadge = \App\Models\Order::statusBadge($order->status);
+                            $statusName = \App\Models\Order::statusLabel($order->status);
                         @endphp
                         <tr>
                             <td>

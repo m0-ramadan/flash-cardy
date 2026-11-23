@@ -67,12 +67,9 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="status">حالة الطلب <span class="text-danger">*</span></label>
                                 <select class="form-select" id="status" name="status" required>
-                                    <option value="pending" @selected(old('status', $order->status) === 'pending')>قيد الانتظار (Pending)</option>
-                                    <option value="processing" @selected(old('status', $order->status) === 'processing')>جاري المعالجة (Processing)</option>
-                                    <option value="shipped" @selected(old('status', $order->status) === 'shipped')>تم الشحن (Shipped)</option>
-                                    <option value="delivered" @selected(old('status', $order->status) === 'delivered')>تم التسليم (Delivered)</option>
-                                    <option value="completed" @selected(old('status', $order->status) === 'completed')>مكتمل (Completed)</option>
-                                    <option value="cancelled" @selected(old('status', $order->status) === 'cancelled')>ملغي (Cancelled)</option>
+                                    @foreach (\App\Models\Order::selectableStatuses() as $value => $label)
+                                        <option value="{{ $value }}" @selected(old('status', $order->status) === $value)>{{ $label }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>

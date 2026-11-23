@@ -282,12 +282,12 @@
             color: #004085;
         }
 
-        .status-shipped {
-            background: #d1ecf1;
-            color: #0c5460;
+        .status-paid {
+            background: #cce5ff;
+            color: #004085;
         }
 
-        .status-delivered {
+        .status-completed {
             background: #d4edda;
             color: #155724;
         }

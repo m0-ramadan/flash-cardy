@@ -96,9 +96,9 @@ class OrderController extends Controller
         $stats = [
             'total' => Order::count(),
             'pending' => Order::where('status', 'pending')->count(),
+            'paid' => Order::where('status', 'paid')->count(),
             'processing' => Order::where('status', 'processing')->count(),
-            'shipped' => Order::where('status', 'shipped')->count(),
-            'delivered' => Order::where('status', 'delivered')->count(),
+            'completed' => Order::where('status', 'completed')->count(),
             'cancelled' => Order::where('status', 'cancelled')->count(),
             'total_revenue' => PaymentTransaction::whereIn('status', ['paid','finished','confirmed','success'])->sum('original_amount'),
         ];
@@ -159,7 +159,7 @@ class OrderController extends Controller
             'discount_amount' => 'nullable|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
             'payment_method' => 'required|string|max:100',
-            'status' => 'nullable|in:pending,processing,completed,delivered,cancelled',
+            'status' => 'nullable|in:pending,paid,processing,completed,cancelled',
             'notes' => 'nullable|string|max:5000',
         ]);
 
@@ -430,7 +430,7 @@ class OrderController extends Controller
             'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'nullable|string|max:50',
             'shipping_address' => 'nullable|string|max:5000',
-            'status' => 'required|in:pending,processing,shipped,delivered,completed,cancelled',
+            'status' => 'required|in:pending,paid,processing,completed,cancelled',
             'payment_method' => 'required|string|max:100',
             'notes' => 'nullable|string|max:5000',
             'subtotal' => 'required|numeric|min:0',
@@ -653,7 +653,7 @@ class OrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
-        $data=$request->validate(['status'=>'required|string|in:pending,processing,shipped,delivered,completed,cancelled','notes'=>'nullable|string|max:1000']);
+        $data=$request->validate(['status'=>'required|string|in:pending,paid,processing,completed,cancelled','notes'=>'nullable|string|max:1000']);
         try {
             $updated=$this->lifecycle->transition($order,$data['status'],auth('admin')->id(),$data['notes']??null);
             return response()->json(['success'=>true,'message'=>'تم تحديث حالة الطلب بنجاح','status'=>$updated->status,'fulfillment_status'=>$updated->fulfillment_status,'status_label'=>$updated->status_label]);

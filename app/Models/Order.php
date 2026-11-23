@@ -99,16 +99,54 @@ class Order extends Model
         return $this->order_number;
     }
 
+    /**
+     * Order statuses. The catalogue is digital (games/subscriptions), so there
+     * is no shipping lifecycle: an order moves from "awaiting payment" to
+     * "paid", then optionally to "processing"/"completed" once codes are
+     * delivered. Kept as a single source of truth for views, validation,
+     * statistics and the API.
+     */
+    public const STATUS_LABELS = [
+        'pending' => 'بانتظار الدفع',
+        'paid' => 'تم الدفع',
+        'processing' => 'قيد التنفيذ',
+        'completed' => 'مكتمل',
+        'cancelled' => 'ملغي',
+        'refunded' => 'تم الاسترداد',
+    ];
+
+    public const STATUSES = ['pending', 'paid', 'processing', 'completed', 'cancelled', 'refunded'];
+
+    /**
+     * Statuses an administrator may pick manually. Refunds are a separate
+     * financial operation (Refunds screen), so they are excluded here.
+     */
+    public static function selectableStatuses(): array
+    {
+        return array_diff_key(self::STATUS_LABELS, ['refunded' => true]);
+    }
+
+    public static function statusLabel(?string $status): string
+    {
+        return self::STATUS_LABELS[$status] ?? ($status ?: 'غير معروف');
+    }
+
+    public static function statusBadge(?string $status): string
+    {
+        return match ($status) {
+            'pending' => 'bg-label-warning',
+            'paid' => 'bg-label-primary',
+            'processing' => 'bg-label-info',
+            'completed' => 'bg-label-success',
+            'cancelled' => 'bg-label-danger',
+            'refunded' => 'bg-label-secondary',
+            default => 'bg-label-secondary',
+        };
+    }
+
     public function getStatusLabelAttribute()
     {
-        return match ($this->status) {
-            'pending' => 'قيد الانتظار',
-            'processing' => 'تحت المعالجة',
-            'completed' => 'تم التسليم',
-            'cancelled' => 'ملغي',
-            'refunded' => 'تم الاسترداد',
-            default => 'غير معروف',
-        };
+        return self::statusLabel($this->status);
     }
 
     public function getProviderLabelAttribute()

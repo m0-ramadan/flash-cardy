@@ -43,8 +43,10 @@ class CompletePaidOrderService
                     'status_payment' => 'paid',
                     'payment_state' => 'paid',
                     'paid_at' => $locked->paid_at ?: now(),
-                    'order_state' => $locked->order_state ?: 'paid',
-                    'fulfillment_status' => in_array($locked->fulfillment_status, ['fulfilled', 'delivered', 'cancelled'], true)
+                    'order_state' => 'paid',
+                    // Digital catalogue: a confirmed payment means "paid", not "processing".
+                    'status' => $locked->status === 'pending' ? 'paid' : $locked->status,
+                    'fulfillment_status' => in_array($locked->fulfillment_status, ['fulfilled', 'cancelled'], true)
                         ? $locked->fulfillment_status
                         : 'processing',
                 ])->save();
@@ -89,8 +91,9 @@ class CompletePaidOrderService
                 $locked->forceFill([
                     'fulfillment_status' => 'fulfilled',
                     'fulfilled_at' => $locked->fulfilled_at ?: now(),
-                    'order_state' => in_array($locked->order_state, ['delivered', 'cancelled'], true) ? $locked->order_state : 'processing',
-                    'status' => $locked->status === 'pending' ? 'processing' : $locked->status,
+                    'order_state' => $locked->order_state === 'cancelled' ? $locked->order_state : 'completed',
+                    // Codes delivered automatically -> the order is complete.
+                    'status' => in_array($locked->status, ['cancelled', 'refunded'], true) ? $locked->status : 'completed',
                 ])->save();
             } else {
                 $locked->forceFill([

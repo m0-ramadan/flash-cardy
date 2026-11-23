@@ -211,22 +211,8 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted">حالة الطلب الحالية:</span>
                         @php
-                            $badge = match($order->status) {
-                                'pending' => 'bg-warning',
-                                'processing' => 'bg-info',
-                                'shipped', 'delivered', 'completed' => 'bg-success',
-                                'cancelled' => 'bg-danger',
-                                default => 'bg-secondary'
-                            };
-                            $label = match($order->status) {
-                                'pending' => 'قيد الانتظار',
-                                'processing' => 'جاري التجهيز',
-                                'shipped' => 'تم الشحن',
-                                'delivered' => 'تم التسليم',
-                                'completed' => 'مكتمل',
-                                'cancelled' => 'ملغي',
-                                default => $order->status
-                            };
+                            $badge = str_replace('bg-label-', 'bg-', \App\Models\Order::statusBadge($order->status));
+                            $label = \App\Models\Order::statusLabel($order->status);
                         @endphp
                         <span class="badge {{ $badge }} fs-6 px-3 py-1">{{ $label }}</span>
                     </div>
@@ -250,12 +236,9 @@
                         <div class="mb-3">
                             <label class="form-label" for="update_status">تغيير حالة الطلب</label>
                             <select class="form-select" id="update_status" name="status" required>
-                                <option value="pending" @selected($order->status === 'pending')>قيد الانتظار (Pending)</option>
-                                <option value="processing" @selected($order->status === 'processing')>جاري المعالجة (Processing)</option>
-                                <option value="shipped" @selected($order->status === 'shipped')>تم الشحن (Shipped)</option>
-                                <option value="delivered" @selected($order->status === 'delivered')>تم التسليم (Delivered)</option>
-                                <option value="completed" @selected($order->status === 'completed')>مكتمل (Completed)</option>
-                                <option value="cancelled" @selected($order->status === 'cancelled')>إلغاء الطلب (Cancelled)</option>
+                                @foreach (\App\Models\Order::selectableStatuses() as $value => $label)
+                                    <option value="{{ $value }}" @selected($order->status === $value)>{{ $label }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div class="mb-3">
