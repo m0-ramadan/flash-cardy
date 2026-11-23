@@ -6,6 +6,45 @@
    Comprehensive Dark Mode Support for Sneat Dashboard
    ========================================================================== */
 .dark-style,
+.dark-style body {
+    --bs-body-bg: #25293c !important;
+    --bs-body-bg-rgb: 37, 41, 60 !important;
+    --bs-body-color: #b6bee3 !important;
+    --bs-body-color-rgb: 182, 190, 227 !important;
+    --bs-heading-color: #cfd3ec !important;
+    --bs-secondary-color: #7983bb !important;
+    --bs-card-bg: #2f3349 !important;
+    --bs-card-bg-rgb: 47, 51, 73 !important;
+    --bs-card-border-color: #434968 !important;
+    --bs-card-color: #b6bee3 !important;
+    --bs-border-color: #434968 !important;
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.12) !important;
+    --bs-light-bg-subtle: #2f3349 !important;
+    --bs-secondary-bg-subtle: #353952 !important;
+    --bs-tertiary-bg-subtle: #353952 !important;
+    --bs-tertiary-bg: #353952 !important;
+    --bs-secondary-bg: #353952 !important;
+    --bs-info-bg-subtle: rgba(115, 103, 240, 0.12) !important;
+    --bs-primary-bg-subtle: rgba(115, 103, 240, 0.15) !important;
+    --bs-success-bg-subtle: rgba(40, 199, 111, 0.15) !important;
+    --bs-warning-bg-subtle: rgba(255, 159, 67, 0.15) !important;
+    --bs-danger-bg-subtle: rgba(234, 84, 85, 0.15) !important;
+    --bs-light: #353952 !important;
+    --bs-light-rgb: 53, 57, 82 !important;
+    --bs-white: #2f3349 !important;
+    --bs-white-rgb: 47, 51, 73 !important;
+    --bs-gray-50: #25293c !important;
+    --bs-gray-100: #2f3349 !important;
+    --bs-gray-200: #353952 !important;
+    --bs-gray-300: #434968 !important;
+    --bs-table-bg: #2f3349 !important;
+    --bs-table-color: #b6bee3 !important;
+    --bs-table-border-color: #434968 !important;
+    --bs-table-striped-bg: #353952 !important;
+    --bs-table-hover-bg: #3b3f5c !important;
+}
+
+.dark-style,
 .dark-style body,
 .dark-style .layout-page,
 .dark-style .content-wrapper,
@@ -15,24 +54,58 @@
     color: #b6bee3 !important;
 }
 
+/* Universal Dark Surface for All Cards, Items, and Containers */
+.dark-style .social-media-item,
+.dark-style .notification-item,
+.dark-style .settings-card,
+.dark-style .alert-guide,
+.dark-style .email-template,
+.dark-style .email-template-preview,
+.dark-style .edit-form,
+.dark-style .icon-preview,
+.dark-style .filter-tab,
+.dark-style .sort-btn,
+.dark-style .storage-card,
+.dark-style .ad-card,
+.dark-style .stats-card,
+.dark-style .coupon-card,
+.dark-style .user-stat-card,
 .dark-style .card,
+.dark-style .card-body,
+.dark-style .card-header,
+.dark-style .card-footer,
 .dark-style .bg-white,
+.dark-style .bg-light,
+.dark-style .table-light,
+.dark-style .list-group-item,
+.dark-style .accordion-item,
+.dark-style .accordion-button,
+.dark-style .modal-content,
+.dark-style .offcanvas,
+.dark-style .tab-content,
 .dark-style div[style*="background: white"],
 .dark-style div[style*="background: #fff"],
+.dark-style div[style*="background: #ffffff"],
 .dark-style div[style*="background-color: white"],
-.dark-style div[style*="background-color: #fff"] {
+.dark-style div[style*="background-color: #fff"],
+.dark-style div[style*="background-color: #ffffff"],
+.dark-style section[style*="background: white"],
+.dark-style section[style*="background: #fff"],
+.dark-style section[style*="background-color: white"],
+.dark-style section[style*="background-color: #fff"] {
     background-color: #2f3349 !important;
-    color: #b6bee3 !important;
     border-color: #434968 !important;
+    color: #b6bee3 !important;
 }
 
 .dark-style .card-header,
 .dark-style .card-footer {
     background-color: #2f3349 !important;
     border-color: #434968 !important;
-    color: #b6bee3 !important;
+    color: #cfd3ec !important;
 }
 
+/* Tables in Dark Mode */
 .dark-style .table,
 .dark-style .table-responsive,
 .dark-style .table-responsive.bg-white {
@@ -46,29 +119,94 @@
     color: #b6bee3 !important;
 }
 
-.dark-style .text-dark {
+.dark-style .table-light,
+.dark-style thead th {
+    background-color: #353952 !important;
+    border-color: #434968 !important;
     color: #cfd3ec !important;
 }
 
-.dark-style .text-muted {
+/* Typography & Headings in Dark Mode */
+.dark-style .social-name,
+.dark-style .notification-title,
+.dark-style .settings-title,
+.dark-style .email-template-title,
+.dark-style .social-title,
+.dark-style .toggle-label,
+.dark-style .text-dark,
+.dark-style .fw-bold,
+.dark-style .fw-semibold,
+.dark-style h1, .dark-style h2, .dark-style h3, .dark-style h4, .dark-style h5, .dark-style h6 {
+    color: #cfd3ec !important;
+}
+
+.dark-style .social-value,
+.dark-style .notification-description,
+.dark-style .settings-description,
+.dark-style .text-muted,
+.dark-style .text-secondary {
     color: #7983bb !important;
 }
 
+.dark-style .social-media-header,
+.dark-style .notification-header,
+.dark-style .settings-header {
+    border-color: #434968 !important;
+}
+
+/* Inputs, Textareas, Selects */
+.dark-style input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+.dark-style select,
+.dark-style textarea,
 .dark-style .form-control,
 .dark-style .form-select,
-.dark-style .input-group-text {
-    background-color: #2f3349 !important;
+.dark-style .input-group-text,
+.dark-style .select2-container--default .select2-selection--single,
+.dark-style .select2-container--default .select2-selection--multiple,
+.dark-style .select2-dropdown,
+.dark-style .select2-search__field {
+    background-color: #25293c !important;
     border-color: #434968 !important;
     color: #cfd3ec !important;
 }
 
 .dark-style .form-control:focus,
-.dark-style .form-select:focus {
-    background-color: #2f3349 !important;
+.dark-style .form-select:focus,
+.dark-style input:focus,
+.dark-style textarea:focus {
+    background-color: #25293c !important;
     border-color: #7367f0 !important;
     color: #cfd3ec !important;
+    box-shadow: 0 0 0 0.25rem rgba(115, 103, 240, 0.25) !important;
 }
 
+.dark-style .form-control::placeholder,
+.dark-style input::placeholder,
+.dark-style textarea::placeholder {
+    color: #7983bb !important;
+}
+
+/* Toggle Switches & Checkboxes */
+.dark-style .toggle-slider {
+    background-color: #434968 !important;
+}
+.dark-style input:checked + .toggle-slider {
+    background-color: #7367f0 !important;
+}
+.dark-style .toggle-slider:before {
+    background-color: #cfd3ec !important;
+}
+
+.dark-style .form-check-input {
+    background-color: #25293c !important;
+    border-color: #434968 !important;
+}
+.dark-style .form-check-input:checked {
+    background-color: #7367f0 !important;
+    border-color: #7367f0 !important;
+}
+
+/* Borders */
 .dark-style .border,
 .dark-style .border-top,
 .dark-style .border-bottom,
@@ -83,6 +221,7 @@
     color: #b6bee3 !important;
 }
 
+/* Modals & Dropdowns */
 .dark-style .modal-content {
     background-color: #2f3349 !important;
     color: #b6bee3 !important;

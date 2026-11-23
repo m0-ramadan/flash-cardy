@@ -135,7 +135,8 @@
         }
 
         .social-media-item {
-            background: var(--bs-light-bg-subtle);
+            background: var(--bs-card-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 15px;
@@ -172,7 +173,8 @@
         }
 
         .notification-item {
-            background: var(--bs-light-bg-subtle);
+            background: var(--bs-card-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 10px;
@@ -219,8 +221,8 @@
         }
 
         .email-template-preview {
-            background: white;
-            border: 1px solid #dee2e6;
+            background: var(--bs-card-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 5px;
             padding: 15px;
             min-height: 200px;

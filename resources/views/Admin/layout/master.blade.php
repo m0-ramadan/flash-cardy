@@ -56,6 +56,7 @@
 
 </head>
 @yield('css')
+<link rel="stylesheet" href="{{ asset('dashboard/assets/css/custome.css') }}" />
 
 <body>
     <!-- Layout wrapper -->
