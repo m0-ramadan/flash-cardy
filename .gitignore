@@ -23,4 +23,7 @@ _database_reference/
 /storage/framework/views/*
 /storage/logs/*
 /storage/app/public/products/*
+/storage/app/certs/
+*.p12
+*.pem
 /storage/framework/testing/*

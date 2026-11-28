@@ -17,6 +17,9 @@ class Like4AppService
     protected $phone;
     protected $hashKey;
     protected $baseUrl;
+    protected $mtlsCertPath;
+    protected $mtlsCertPassword;
+    protected $mtlsCertType;
 
     public function __construct()
     {
@@ -27,6 +30,54 @@ class Like4AppService
         $this->phone = config('services.like4app.phone');
         $this->hashKey = config('services.like4app.hash_key');
         $this->baseUrl = rtrim((string) config('services.like4app.base_url', 'https://taxes.like4app.com/online'), '/');
+        $this->mtlsCertPath = config('services.like4app.mtls_cert_path');
+        $this->mtlsCertPassword = config('services.like4app.mtls_cert_password');
+        $this->mtlsCertType = strtoupper(trim((string) config('services.like4app.mtls_cert_type', 'P12')));
+    }
+
+    /**
+     * Build Guzzle/cURL options including mTLS client certificate when configured.
+     */
+    protected function buildHttpOptions(): array
+    {
+        $curl = [
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+        ];
+
+        $certPath = $this->resolveCertPath($this->mtlsCertPath);
+        if ($certPath !== null) {
+            if (!is_readable($certPath)) {
+                Log::warning('Like4App mTLS certificate file is not readable', [
+                    'path' => $certPath,
+                ]);
+            } else {
+                $curl[CURLOPT_SSLCERT] = $certPath;
+                if ($this->mtlsCertType !== '') {
+                    $curl[CURLOPT_SSLCERTTYPE] = $this->mtlsCertType;
+                }
+                if ($this->mtlsCertPassword !== null && $this->mtlsCertPassword !== '') {
+                    $curl[CURLOPT_SSLCERTPASSWD] = (string) $this->mtlsCertPassword;
+                }
+            }
+        }
+
+        return [
+            'curl' => $curl,
+        ];
+    }
+
+    protected function resolveCertPath(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1) {
+            return $path;
+        }
+
+        return base_path($path);
     }
 
     /**
@@ -115,18 +166,12 @@ class Like4AppService
         try {
             $startTime = microtime(true);
 
+            $httpOptions = $this->buildHttpOptions();
+
             if (strtoupper($method) === 'POST') {
-                $response = Http::withOptions([
-                    'curl' => [
-                        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-                    ],
-                ])->asMultipart()->post($url, $params);
+                $response = Http::withOptions($httpOptions)->asMultipart()->post($url, $params);
             } else {
-                $response = Http::withOptions([
-                    'curl' => [
-                        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
-                    ],
-                ])->get($url, $params);
+                $response = Http::withOptions($httpOptions)->get($url, $params);
             }
 
             $duration = round((microtime(true) - $startTime) * 1000, 2);
@@ -189,7 +234,7 @@ class Like4AppService
         try {
             $url = rtrim($this->baseUrl, '/') . '/products';
 
-            $response = Http::withHeaders([
+            $response = Http::withOptions($this->buildHttpOptions())->withHeaders([
                 'Accept' => 'application/json',
                 // 'Cookie' => $this->cookie,
             ])->send('POST', $url, [

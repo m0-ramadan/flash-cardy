@@ -118,6 +118,9 @@ return [
         'phone' => env('LIKE4APP_PHONE'),
         'hash_key' => env('LIKE4APP_HASH_KEY'),
         'base_url' => env('LIKE4APP_BASE_URL', 'https://taxes.like4app.com/online'),
+        'mtls_cert_path' => env('LIKE4APP_MTLS_CERT_PATH'),
+        'mtls_cert_password' => env('LIKE4APP_MTLS_CERT_PASSWORD'),
+        'mtls_cert_type' => env('LIKE4APP_MTLS_CERT_TYPE', 'P12'),
     ],
     'deepseek' => [
         'api_key' => env('DEEPSEEK_API_KEY'),
