@@ -64,6 +64,8 @@ Route::get('/', [AdminAuthController::class, 'home'])->name('admin.index')->midd
 Route::prefix('admin')->as('admin.')->middleware(['auth:admin', 'admin.active', 'admin.session', 'admin.permission', 'admin.audit'])->group(function () {
     // Dashboard
     Route::post('logout', [AdminAuthController::class, 'logout'])->name('logout');
+    Route::get('/visitors', [VisitorController::class, 'index'])
+        ->name('visitors.index');
     Route::get('/visitors/chart', [VisitorController::class, 'chartData'])
         ->name('visitors.chart');
 

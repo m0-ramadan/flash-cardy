@@ -148,6 +148,13 @@
                </a>
            </li>
 
+           <li class="menu-item {{ request()->routeIs('admin.visitors.*') ? 'active' : '' }}">
+               <a href="{{ route('admin.visitors.index') }}" class="menu-link">
+                   <i class="menu-icon ti ti-eye"></i>
+                   <div>الزيارات</div>
+               </a>
+           </li>
+
 
 
            {{-- <li class="menu-item ">
