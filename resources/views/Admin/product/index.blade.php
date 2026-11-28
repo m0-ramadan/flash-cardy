@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="container-xxl flex-grow-1 container-p-y">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h4 class="fw-bold mb-1">إدارة المنتجات</h4>
             <nav aria-label="breadcrumb">
@@ -14,9 +14,20 @@
                 </ol>
             </nav>
         </div>
-        <a href="{{ route('admin.products.create') }}" class="btn btn-primary">
-            <i class="ti ti-plus me-1"></i> إضافة منتج جديد
-        </a>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" class="btn btn-warning" id="syncFromLdBtn" onclick="syncFromLd()">
+                <i class="ti ti-refresh me-1"></i> مزامنة المنتجات (LikeCard)
+            </button>
+            <button type="button" class="btn btn-info" id="downloadImagesBtn" onclick="downloadProductImages()">
+                <i class="ti ti-photo-down me-1"></i> مزامنة الصور
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="exportProducts()">
+                <i class="ti ti-file-export me-1"></i> تصدير
+            </button>
+            <a href="{{ route('admin.products.create') }}" class="btn btn-primary">
+                <i class="ti ti-plus me-1"></i> إضافة منتج جديد
+            </a>
+        </div>
     </div>
 
     @if (session('success'))
@@ -148,20 +159,48 @@
         </div>
     </div>
 
+    <!-- شريط الإجراءات الجماعية -->
+    <div class="card mb-3 shadow-sm border-primary d-none" id="bulkActionsBar">
+        <div class="card-body py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary" id="selectedCountBadge">0</span>
+                <span class="fw-semibold">منتج محدد</span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <select class="form-select form-select-sm" id="bulkActionSelect" style="width: 180px;">
+                    <option value="">اختر إجراء جماعي...</option>
+                    <option value="activate">تفعيل المحدد</option>
+                    <option value="deactivate">تعطيل المحدد</option>
+                    <option value="draft">تحويل لمسودة</option>
+                    <option value="delete">حذف المحدد</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-primary" onclick="applyBulkAction()">
+                    <i class="ti ti-check me-1"></i> تنفيذ
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">
+                    إلغاء التحديد
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- جدول المنتجات -->
     <div class="card shadow-sm">
         <div class="table-responsive text-nowrap">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 60px;">#</th>
-                        <th style="width: 80px;">الصورة</th>
+                        <th style="width: 40px;">
+                            <input class="form-check-input" type="checkbox" id="selectAllProducts" title="تحديد الكل">
+                        </th>
+                        <th style="width: 55px;">#</th>
+                        <th style="width: 75px;">الصورة</th>
                         <th>المنتج</th>
                         <th>القسم</th>
                         <th>السعر</th>
                         <th>المخزون / التسليم</th>
                         <th class="text-center">الحالة</th>
-                        <th class="text-center" style="width: 160px;">الإجراءات</th>
+                        <th class="text-center" style="width: 210px;">الإجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -173,6 +212,9 @@
                             $curr = $product->sign_currency ?: config('commerce.base_currency', 'ر.س');
                         @endphp
                         <tr>
+                            <td>
+                                <input class="form-check-input product-checkbox" type="checkbox" value="{{ $product->id }}">
+                            </td>
                             <td class="text-muted">{{ $loop->iteration + ($products->currentPage() - 1) * $products->perPage() }}</td>
                             <td>
                                 @if ($imagePath)
@@ -224,19 +266,34 @@
                                 @endif
                             </td>
                             <td class="text-center">
-                                <a href="{{ route('admin.products.toggle-status', $product->id) }}" class="btn btn-sm btn-icon {{ $product->status_id == 1 ? 'btn-label-success' : 'btn-label-danger' }}" title="{{ $product->status_id == 1 ? 'نشط - اضغط للتعطيل' : 'معطل - اضغط للتفعيل' }}">
+                                <button type="button"
+                                    class="btn btn-sm btn-icon btn-toggle-status {{ $product->status_id == 1 ? 'btn-label-success' : 'btn-label-danger' }}"
+                                    data-url="{{ route('admin.products.toggle-status', $product->id) }}"
+                                    title="{{ $product->status_id == 1 ? 'نشط - اضغط للتعطيل' : 'معطل - اضغط للتفعيل' }}">
                                     <i class="ti {{ $product->status_id == 1 ? 'ti-check' : 'ti-x' }} fs-5"></i>
-                                </a>
+                                </button>
                             </td>
                             <td class="text-center">
                                 <div class="d-inline-flex gap-1">
+                                    @if($product->external_id || $product->fulfillment_source === 'like4app')
+                                        <button type="button" class="btn btn-sm btn-icon btn-outline-warning"
+                                            onclick="syncSingleProduct({{ $product->id }})" title="مزامنة المنتج من LikeCard">
+                                            <i class="ti ti-refresh"></i>
+                                        </button>
+                                    @endif
                                     <a href="{{ route('admin.products.show', $product->id) }}" class="btn btn-sm btn-icon btn-outline-info" title="عرض التفاصيل والأكواد">
                                         <i class="ti ti-eye"></i>
                                     </a>
                                     <a href="{{ route('admin.products.edit', $product->id) }}" class="btn btn-sm btn-icon btn-outline-primary" title="تعديل">
                                         <i class="ti ti-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-sm btn-icon btn-outline-danger btn-delete-prod" 
+                                    <form action="{{ route('admin.products.duplicate', $product->id) }}" method="POST" class="d-inline" onsubmit="return confirm('هل تريد إنشاء نسخة مسودة من هذا المنتج؟')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" title="نسخ المنتج">
+                                            <i class="ti ti-copy"></i>
+                                        </button>
+                                    </form>
+                                    <button type="button" class="btn btn-sm btn-icon btn-outline-danger btn-delete-prod"
                                             data-id="{{ $product->id }}" data-name="{{ $prodNameAr }}" title="حذف">
                                         <i class="ti ti-trash"></i>
                                     </button>
@@ -245,7 +302,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center py-5">
+                            <td colspan="9" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="ti ti-package-off fs-1 d-block mb-2 text-secondary"></i>
                                     <h5>لا توجد منتجات مطابقة</h5>
@@ -276,18 +333,273 @@
 @endsection
 
 @section('js')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+const csrfToken = '{{ csrf_token() }}';
+
+function updateBulkBar() {
+    const checked = document.querySelectorAll('.product-checkbox:checked');
+    const bar = document.getElementById('bulkActionsBar');
+    const badge = document.getElementById('selectedCountBadge');
+    badge.textContent = checked.length;
+    bar.classList.toggle('d-none', checked.length === 0);
+}
+
+window.clearSelection = function() {
+    document.querySelectorAll('.product-checkbox, #selectAllProducts').forEach(cb => cb.checked = false);
+    updateBulkBar();
+};
+
+window.applyBulkAction = async function() {
+    const ids = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => Number(cb.value));
+    const action = document.getElementById('bulkActionSelect').value;
+
+    if (!ids.length) {
+        Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى تحديد منتج واحد على الأقل' });
+        return;
+    }
+    if (!action) {
+        Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار الإجراء المطلوب' });
+        return;
+    }
+
+    const confirmRes = await Swal.fire({
+        title: 'تأكيد الإجراء الجماعي',
+        text: `سيتم تنفيذ الإجراء على ${ids.length} منتج`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'تنفيذ',
+        cancelButtonText: 'إلغاء'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    Swal.fire({ title: 'جاري التنفيذ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const res = await fetch('{{ route('admin.products.bulk-action') }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ ids, action })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'حدث خطأ أثناء تنفيذ الإجراء');
+        }
+        Swal.fire({ icon: 'success', title: 'تم بنجاح', text: data.message, timer: 1400, showConfirmButton: false })
+            .then(() => location.reload());
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+    }
+};
+
+window.exportProducts = function() {
+    const filters = new URLSearchParams(window.location.search);
+    const url = '{{ route('admin.products.export') }}' + (filters.toString() ? '?' + filters.toString() : '');
+    window.open(url, '_blank');
+};
+
+window.syncFromLd = async function() {
+    let nextPage = 1;
+    let finished = false;
+    let totalNew = 0;
+    let totalUpdated = 0;
+    let totalUnchanged = 0;
+    let totalFailed = 0;
+
+    Swal.fire({
+        title: 'جاري مزامنة المنتجات من LikeCard...',
+        allowOutsideClick: false,
+        didOpen: async () => {
+            Swal.showLoading();
+            try {
+                while (!finished) {
+                    const response = await fetch('{{ route('admin.products.sync-from-like4app-batch') }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ page: nextPage })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'حدث خطأ أثناء مزامنة المنتجات');
+                    }
+
+                    totalNew += data.new_count ?? 0;
+                    totalUpdated += data.updated_count ?? 0;
+                    totalUnchanged += data.unchanged_count ?? 0;
+                    totalFailed += data.failed_count ?? 0;
+                    finished = !!data.finished;
+                    nextPage = data.next_page ?? (nextPage + 1);
+
+                    Swal.update({
+                        html: `
+                            <div class="text-end" dir="rtl">
+                                <p class="mb-1">الصفحة الحالية: <strong>${nextPage - 1}</strong></p>
+                                <p class="mb-1 text-success">منتجات جديدة: <strong>${totalNew}</strong></p>
+                                <p class="mb-1 text-primary">منتجات محدثة: <strong>${totalUpdated}</strong></p>
+                                <p class="mb-1 text-muted">لم تتغير: <strong>${totalUnchanged}</strong></p>
+                                <p class="mb-0 text-danger">فشل: <strong>${totalFailed}</strong></p>
+                            </div>
+                        `
+                    });
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تمت مزامنة المنتجات بنجاح',
+                    html: `تمت إضافة <b>${totalNew}</b> منتج وتحديث <b>${totalUpdated}</b> منتج. يمكنك الآن تشغيل مزامنة الصور.`
+                }).then(() => location.reload());
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'خطأ في المزامنة', text: error.message });
+            }
+        }
+    });
+};
+
+window.downloadProductImages = async function() {
+    let finished = false;
+    let totalProcessed = 0;
+
+    Swal.fire({
+        title: 'جاري تحميل ومزامنة صور المنتجات...',
+        allowOutsideClick: false,
+        didOpen: async () => {
+            Swal.showLoading();
+            try {
+                while (!finished) {
+                    const response = await fetch('{{ route('admin.products.download-images-batch') }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ limit: 20 })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'حدث خطأ أثناء تحميل الصور');
+                    }
+
+                    totalProcessed += data.processed ?? 0;
+                    finished = !!data.finished;
+
+                    Swal.update({ html: `<p>تمت معالجة <strong>${totalProcessed}</strong> صورة</p>` });
+                }
+
+                Swal.fire({ icon: 'success', title: 'تمت مزامنة الصور بنجاح' }).then(() => location.reload());
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: error.message });
+            }
+        }
+    });
+};
+
+window.syncSingleProduct = function(productId) {
+    Swal.fire({
+        title: 'مزامنة المنتج',
+        text: 'هل تريد مزامنة بيانات وسعر هذا المنتج من LikeCard؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، مزامنة',
+        cancelButtonText: 'إلغاء',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            return fetch(`{{ url('admin/products') }}/${productId}/sync-from-ld`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'حدث خطأ أثناء مزامنة المنتج');
+                }
+                return data;
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`خطأ: ${error.message}`);
+            });
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                icon: 'success',
+                title: 'تمت المزامنة',
+                text: result.value?.message || 'تم تحديث المنتج بنجاح',
+                timer: 1500,
+                showConfirmButton: false
+            }).then(() => location.reload());
+        }
+    });
+};
+
 document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAllProducts');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = this.checked);
+            updateBulkBar();
+        });
+    }
+
+    document.querySelectorAll('.product-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBulkBar);
+    });
+
+    document.querySelectorAll('.btn-toggle-status').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const url = this.dataset.url;
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.message || 'فشل تغيير الحالة');
+                const isActive = Number(data.status_id) === 1;
+                this.classList.toggle('btn-label-success', isActive);
+                this.classList.toggle('btn-label-danger', !isActive);
+                this.title = isActive ? 'نشط - اضغط للتعطيل' : 'معطل - اضغط للتفعيل';
+                const icon = this.querySelector('i');
+                icon.classList.toggle('ti-check', isActive);
+                icon.classList.toggle('ti-x', !isActive);
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            }
+        });
+    });
+
     document.querySelectorAll('.btn-delete-prod').forEach(btn => {
         btn.addEventListener('click', function() {
             const prodId = this.dataset.id;
             const prodName = this.dataset.name;
-
-            if (confirm(`هل أنت متأكد من حذف المنتج "${prodName}"؟`)) {
-                const form = document.getElementById('deleteProdForm');
-                form.action = "{{ url('admin/products') }}/" + prodId;
-                form.submit();
-            }
+            Swal.fire({
+                title: 'تأكيد الحذف',
+                text: `هل أنت متأكد من حذف المنتج "${prodName}"؟`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ea5455',
+                confirmButtonText: 'نعم، حذف',
+                cancelButtonText: 'إلغاء'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const form = document.getElementById('deleteProdForm');
+                    form.action = "{{ url('admin/products') }}/" + prodId;
+                    form.submit();
+                }
+            });
         });
     });
 });
