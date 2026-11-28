@@ -13,87 +13,120 @@ class VisitorController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Visitor::query();
-
-        if ($search = trim((string) $request->get('search', ''))) {
-            $query->where(function ($q) use ($search) {
-                $q->where('ip', 'like', "%{$search}%")
-                    ->orWhere('path', 'like', "%{$search}%")
-                    ->orWhere('city', 'like', "%{$search}%")
-                    ->orWhere('country', 'like', "%{$search}%")
-                    ->orWhere('browser', 'like', "%{$search}%");
-            });
+        $range = $request->get('range', '30');
+        $allowedRanges = ['7', '30', '90', '365', 'all'];
+        if (!in_array($range, $allowedRanges, true)) {
+            $range = '30';
         }
 
-        if ($country = trim((string) $request->get('country', ''))) {
-            $query->where('country', $country);
-        }
+        $fromDate = $range === 'all' ? null : now()->subDays((int) $range)->startOfDay();
 
-        if ($deviceType = trim((string) $request->get('device_type', ''))) {
-            match ($deviceType) {
-                'mobile' => $query->where('is_mobile', true),
-                'tablet' => $query->where('is_tablet', true),
-                'desktop' => $query->where('is_desktop', true),
-                'bot' => $query->where('is_bot', true),
-                default => null,
-            };
+        $baseQuery = Visitor::query();
+        if ($fromDate) {
+            $baseQuery->where('created_at', '>=', $fromDate);
         }
-
-        if ($from = $request->get('from')) {
-            $query->whereDate('created_at', '>=', $from);
-        }
-
-        if ($to = $request->get('to')) {
-            $query->whereDate('created_at', '<=', $to);
-        }
-
-        $visitors = $query->latest('id')->paginate(25)->withQueryString();
 
         $startOfMonth = now()->startOfMonth();
         $endOfMonth = now()->endOfMonth();
+
+        $periodTotal = (clone $baseQuery)->count();
 
         $stats = [
             'total' => Visitor::count(),
             'today' => Visitor::whereDate('created_at', today())->count(),
             'month' => Visitor::whereBetween('created_at', [$startOfMonth, $endOfMonth])->count(),
-            'unique_month_ips' => Visitor::whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                ->distinct('ip')
-                ->count('ip'),
+            'period' => $periodTotal,
         ];
 
-        $since30Days = now()->subDays(30);
+        // Daily visits trend for chart (max last 30/90 days or grouped by month for 365/all)
+        if (in_array($range, ['7', '30', '90'], true)) {
+            $dailyRaw = (clone $baseQuery)
+                ->selectRaw('DATE(created_at) as label, COUNT(*) as total')
+                ->groupByRaw('DATE(created_at)')
+                ->orderBy('label')
+                ->get();
+        } else {
+            $dailyRaw = (clone $baseQuery)
+                ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as label, COUNT(*) as total")
+                ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m')")
+                ->orderBy('label')
+                ->get();
+        }
 
-        $topCountries = Visitor::select('country', DB::raw('COUNT(*) as total'))
-            ->where('created_at', '>=', $since30Days)
+        $chartLabels = $dailyRaw->pluck('label')->values();
+        $chartCounts = $dailyRaw->pluck('total')->map(fn ($v) => (int) $v)->values();
+
+        // Device breakdown
+        $devicesRaw = (clone $baseQuery)
+            ->selectRaw('
+                SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) as bots,
+                SUM(CASE WHEN is_bot = 0 AND is_mobile = 1 THEN 1 ELSE 0 END) as mobile,
+                SUM(CASE WHEN is_bot = 0 AND is_tablet = 1 THEN 1 ELSE 0 END) as tablet,
+                SUM(CASE WHEN is_bot = 0 AND is_mobile = 0 AND is_tablet = 0 THEN 1 ELSE 0 END) as desktop
+            ')
+            ->first();
+
+        $deviceBreakdown = [
+            ['label' => 'كمبيوتر (Desktop)', 'count' => (int) ($devicesRaw->desktop ?? 0), 'color' => 'bg-success', 'icon' => 'ti-device-desktop'],
+            ['label' => 'موبايل (Mobile)', 'count' => (int) ($devicesRaw->mobile ?? 0), 'color' => 'bg-info', 'icon' => 'ti-device-mobile'],
+            ['label' => 'تابلت (Tablet)', 'count' => (int) ($devicesRaw->tablet ?? 0), 'color' => 'bg-secondary', 'icon' => 'ti-device-tablet'],
+            ['label' => 'بوتات (Bots)', 'count' => (int) ($devicesRaw->bots ?? 0), 'color' => 'bg-warning', 'icon' => 'ti-robot'],
+        ];
+        foreach ($deviceBreakdown as &$d) {
+            $d['percent'] = $periodTotal > 0 ? round(($d['count'] / $periodTotal) * 100, 1) : 0;
+        }
+        unset($d);
+
+        // Top countries
+        $topCountries = (clone $baseQuery)
+            ->select('country', DB::raw('COUNT(*) as total'))
             ->whereNotNull('country')
             ->where('country', '!=', '')
             ->groupBy('country')
             ->orderByDesc('total')
-            ->limit(5)
+            ->limit(10)
             ->get();
 
-        $topPages = Visitor::select('path', DB::raw('COUNT(*) as total'))
-            ->where('created_at', '>=', $since30Days)
+        // Top pages
+        $topPages = (clone $baseQuery)
+            ->select('path', DB::raw('COUNT(*) as total'))
             ->whereNotNull('path')
             ->where('path', '!=', '')
             ->groupBy('path')
             ->orderByDesc('total')
-            ->limit(5)
+            ->limit(10)
             ->get();
 
-        $countries = Visitor::select('country')
-            ->whereNotNull('country')
-            ->where('country', '!=', '')
-            ->distinct()
-            ->orderBy('country')
-            ->pluck('country');
+        // Top browsers
+        $topBrowsers = (clone $baseQuery)
+            ->select('browser', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('browser')
+            ->where('browser', '!=', '')
+            ->groupBy('browser')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        // Top platforms
+        $topPlatforms = (clone $baseQuery)
+            ->select('platform', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('platform')
+            ->where('platform', '!=', '')
+            ->groupBy('platform')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
 
         return view('Admin.visitors.index', compact(
-            'visitors',
+            'range',
             'stats',
+            'chartLabels',
+            'chartCounts',
+            'deviceBreakdown',
             'topCountries',
             'topPages',
-            'countries'
+            'topBrowsers',
+            'topPlatforms'
         ));
     }
 

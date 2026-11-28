@@ -1,22 +1,32 @@
 @extends('Admin.layout.master')
 
-@section('title', 'إدارة الزيارات')
+@section('title', 'إحصائيات الزيارات')
 
 @section('content')
 <div class="container-xxl flex-grow-1 container-p-y">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-            <h4 class="fw-bold mb-1">إحصائيات وسجل الزيارات</h4>
+            <h4 class="fw-bold mb-1">إحصائيات الزيارات</h4>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">
                     <li class="breadcrumb-item"><a href="{{ route('admin.index') }}">الرئيسية</a></li>
-                    <li class="breadcrumb-item active">الزيارات</li>
+                    <li class="breadcrumb-item active">إحصائيات الزيارات</li>
                 </ol>
             </nav>
         </div>
+        <form action="{{ route('admin.visitors.index') }}" method="GET" class="d-flex align-items-center gap-2">
+            <label for="range" class="form-label mb-0 text-muted small">الفترة:</label>
+            <select name="range" id="range" class="form-select form-select-sm" style="width: 170px;" onchange="this.form.submit()">
+                <option value="7" @selected($range === '7')>آخر 7 أيام</option>
+                <option value="30" @selected($range === '30')>آخر 30 يوم</option>
+                <option value="90" @selected($range === '90')>آخر 90 يوم</option>
+                <option value="365" @selected($range === '365')>آخر سنة</option>
+                <option value="all" @selected($range === 'all')>كل الوقت</option>
+            </select>
+        </form>
     </div>
 
-    <!-- بطاقات الإحصائيات -->
+    <!-- بطاقات الإحصائيات الرئيسية -->
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3">
             <div class="card shadow-sm border-0">
@@ -74,12 +84,12 @@
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between">
                         <div>
-                            <span class="text-muted d-block mb-1">زوار فريدون (هذا الشهر)</span>
-                            <h4 class="mb-0 text-warning">{{ number_format($stats['unique_month_ips']) }}</h4>
+                            <span class="text-muted d-block mb-1">زيارات الفترة المحددة</span>
+                            <h4 class="mb-0 text-warning">{{ number_format($stats['period']) }}</h4>
                         </div>
                         <div class="avatar">
                             <span class="avatar-initial rounded bg-label-warning">
-                                <i class="ti ti-users fs-4"></i>
+                                <i class="ti ti-trending-up fs-4"></i>
                             </span>
                         </div>
                     </div>
@@ -88,19 +98,103 @@
         </div>
     </div>
 
-    <!-- ملخص آخر 30 يوم: أكثر الدول والصفحات -->
+    <!-- الرسم البياني + توزيع الأجهزة -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header py-3">
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-chart-area-line me-1"></i> منحنى الزيارات</h6>
+                </div>
+                <div class="card-body">
+                    <div id="visitsTrendChart" style="min-height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header py-3">
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-devices me-1"></i> توزيع الأجهزة</h6>
+                </div>
+                <div class="card-body">
+                    @foreach ($deviceBreakdown as $item)
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span><i class="ti {{ $item['icon'] }} me-1"></i> {{ $item['label'] }}</span>
+                                <span class="fw-semibold">{{ $item['percent'] }}% <small class="text-muted">({{ number_format($item['count']) }})</small></span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {{ $item['color'] }}" role="progressbar" style="width: {{ $item['percent'] }}%"></div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- أكثر الدول وأكثر الصفحات -->
     <div class="row g-3 mb-4">
         <div class="col-md-6">
             <div class="card shadow-sm h-100">
                 <div class="card-header py-3">
-                    <h6 class="mb-0 fw-bold"><i class="ti ti-world me-1"></i> أكثر الدول زيارة (آخر 30 يوم)</h6>
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-world me-1"></i> أكثر الدول زيارة</h6>
                 </div>
                 <div class="card-body pt-0">
                     <ul class="list-group list-group-flush">
                         @forelse ($topCountries as $item)
+                            @php $pct = $stats['period'] > 0 ? round(($item->total / $stats['period']) * 100, 1) : 0; @endphp
                             <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                 <span>{{ $item->country }}</span>
-                                <span class="badge bg-label-primary">{{ number_format($item->total) }}</span>
+                                <div>
+                                    <small class="text-muted me-2">{{ $pct }}%</small>
+                                    <span class="badge bg-label-primary">{{ number_format($item->total) }}</span>
+                                </div>
+                            </li>
+                        @empty
+                            <li class="list-group-item text-muted text-center px-0">لا توجد بيانات في هذه الفترة</li>
+                        @endforelse
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header py-3">
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-link me-1"></i> أكثر الصفحات زيارة</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <ul class="list-group list-group-flush">
+                        @forelse ($topPages as $item)
+                            @php $pct = $stats['period'] > 0 ? round(($item->total / $stats['period']) * 100, 1) : 0; @endphp
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 gap-2">
+                                <span class="text-truncate" dir="ltr" style="max-width: 70%;" title="{{ $item->path }}">{{ $item->path }}</span>
+                                <div class="text-nowrap">
+                                    <small class="text-muted me-2">{{ $pct }}%</small>
+                                    <span class="badge bg-label-info">{{ number_format($item->total) }}</span>
+                                </div>
+                            </li>
+                        @empty
+                            <li class="list-group-item text-muted text-center px-0">لا توجد بيانات في هذه الفترة</li>
+                        @endforelse
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- المتصفحات وأنظمة التشغيل -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header py-3">
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-browser me-1"></i> أكثر المتصفحات استخداماً</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <ul class="list-group list-group-flush">
+                        @forelse ($topBrowsers as $item)
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <span>{{ $item->browser }}</span>
+                                <span class="badge bg-label-secondary">{{ number_format($item->total) }}</span>
                             </li>
                         @empty
                             <li class="list-group-item text-muted text-center px-0">لا توجد بيانات</li>
@@ -112,14 +206,14 @@
         <div class="col-md-6">
             <div class="card shadow-sm h-100">
                 <div class="card-header py-3">
-                    <h6 class="mb-0 fw-bold"><i class="ti ti-link me-1"></i> أكثر الصفحات زيارة (آخر 30 يوم)</h6>
+                    <h6 class="mb-0 fw-bold"><i class="ti ti-cpu me-1"></i> أكثر أنظمة التشغيل</h6>
                 </div>
                 <div class="card-body pt-0">
                     <ul class="list-group list-group-flush">
-                        @forelse ($topPages as $item)
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 gap-2">
-                                <span class="text-truncate" dir="ltr" style="max-width: 75%;" title="{{ $item->path }}">{{ $item->path }}</span>
-                                <span class="badge bg-label-info">{{ number_format($item->total) }}</span>
+                        @forelse ($topPlatforms as $item)
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <span>{{ $item->platform }}</span>
+                                <span class="badge bg-label-secondary">{{ number_format($item->total) }}</span>
                             </li>
                         @empty
                             <li class="list-group-item text-muted text-center px-0">لا توجد بيانات</li>
@@ -129,125 +223,34 @@
             </div>
         </div>
     </div>
-
-    <!-- الفلترة والبحث -->
-    <div class="card mb-4 shadow-sm">
-        <div class="card-body">
-            <form action="{{ route('admin.visitors.index') }}" method="GET" class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label" for="search">بحث (IP / رابط / مدينة / متصفح)</label>
-                    <input type="text" class="form-control" id="search" name="search" value="{{ request('search') }}" placeholder="ابحث...">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="country">الدولة</label>
-                    <select class="form-select" id="country" name="country">
-                        <option value="">الكل</option>
-                        @foreach ($countries as $c)
-                            <option value="{{ $c }}" @selected(request('country') === $c)>{{ $c }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="device_type">الجهاز</label>
-                    <select class="form-select" id="device_type" name="device_type">
-                        <option value="">الكل</option>
-                        <option value="desktop" @selected(request('device_type') === 'desktop')>كمبيوتر</option>
-                        <option value="mobile" @selected(request('device_type') === 'mobile')>موبايل</option>
-                        <option value="tablet" @selected(request('device_type') === 'tablet')>تابلت</option>
-                        <option value="bot" @selected(request('device_type') === 'bot')>بوت (Bot)</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="from">من تاريخ</label>
-                    <input type="date" class="form-control" id="from" name="from" value="{{ request('from') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="to">إلى تاريخ</label>
-                    <input type="date" class="form-control" id="to" name="to" value="{{ request('to') }}">
-                </div>
-                <div class="col-md-1 d-flex align-items-end gap-1">
-                    <button type="submit" class="btn btn-primary w-100" title="تصفية">
-                        <i class="ti ti-filter"></i>
-                    </button>
-                    @if(request()->anyFilled(['search', 'country', 'device_type', 'from', 'to']))
-                        <a href="{{ route('admin.visitors.index') }}" class="btn btn-outline-secondary" title="إلغاء الفلتر">
-                            <i class="ti ti-rotate"></i>
-                        </a>
-                    @endif
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- جدول الزيارات -->
-    <div class="card shadow-sm">
-        <div class="table-responsive text-nowrap">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>IP</th>
-                        <th>الدولة / المدينة</th>
-                        <th>الصفحة / المسار</th>
-                        <th>الجهاز والمتصفح</th>
-                        <th>النوع</th>
-                        <th>التاريخ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($visitors as $visitor)
-                        <tr>
-                            <td class="text-muted">{{ $visitor->id }}</td>
-                            <td dir="ltr" class="text-start"><code>{{ $visitor->ip ?? '—' }}</code></td>
-                            <td>
-                                <span class="fw-semibold">{{ $visitor->country ?: 'غير معروف' }}</span>
-                                @if ($visitor->city)
-                                    <small class="text-muted d-block">{{ $visitor->city }}</small>
-                                @endif
-                            </td>
-                            <td dir="ltr" class="text-start" style="max-width: 280px;">
-                                <div class="text-truncate" title="{{ $visitor->full_url ?: $visitor->path }}">
-                                    <span class="badge bg-label-secondary me-1">{{ $visitor->method ?: 'GET' }}</span>
-                                    {{ $visitor->path ?: '/' }}
-                                </div>
-                            </td>
-                            <td>
-                                <div>{{ $visitor->browser ?: '—' }} @if($visitor->browser_version)<small class="text-muted">{{ $visitor->browser_version }}</small>@endif</div>
-                                <small class="text-muted">{{ $visitor->platform ?: '' }} {{ $visitor->device ? '• ' . $visitor->device : '' }}</small>
-                            </td>
-                            <td>
-                                @if ($visitor->is_bot)
-                                    <span class="badge bg-label-warning"><i class="ti ti-robot me-1"></i> بوت</span>
-                                @elseif ($visitor->is_mobile)
-                                    <span class="badge bg-label-info"><i class="ti ti-device-mobile me-1"></i> موبايل</span>
-                                @elseif ($visitor->is_tablet)
-                                    <span class="badge bg-label-secondary"><i class="ti ti-device-tablet me-1"></i> تابلت</span>
-                                @else
-                                    <span class="badge bg-label-success"><i class="ti ti-device-desktop me-1"></i> كمبيوتر</span>
-                                @endif
-                            </td>
-                            <td dir="ltr" class="text-start">
-                                <small>{{ optional($visitor->created_at)->format('Y-m-d H:i') }}</small>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="ti ti-eye-off fs-1 d-block mb-2"></i>
-                                لا توجد زيارات مطابقة للبحث
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        @if ($visitors->hasPages())
-            <div class="card-footer border-top d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
-                <small class="text-muted">عرض {{ $visitors->firstItem() }} إلى {{ $visitors->lastItem() }} من أصل {{ number_format($visitors->total()) }} زيارة</small>
-                <div>{{ $visitors->links() }}</div>
-            </div>
-        @endif
-    </div>
 </div>
+@endsection
+
+@section('js')
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const labels = @json($chartLabels);
+    const counts = @json($chartCounts);
+
+    const chartEl = document.querySelector('#visitsTrendChart');
+    if (chartEl && labels.length) {
+        const chart = new ApexCharts(chartEl, {
+            series: [{ name: 'الزيارات', data: counts }],
+            chart: { height: 300, type: 'area', toolbar: { show: false } },
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 2 },
+            xaxis: { categories: labels },
+            colors: ['#7367F0'],
+            fill: {
+                type: 'gradient',
+                gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 95, 100] }
+            }
+        });
+        chart.render();
+    } else if (chartEl) {
+        chartEl.innerHTML = '<div class="text-center text-muted py-5">لا توجد بيانات كافية لعرض الرسم البياني</div>';
+    }
+});
+</script>
 @endsection
