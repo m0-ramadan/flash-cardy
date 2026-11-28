@@ -65,7 +65,7 @@
                                             </span>
                                         </div>
                                         <h4 class="ms-1 mb-0">
-                                            {{ \App\Models\Order::whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])->count() }}
+                                            {{ $stats['monthly_orders'] ?? 0 }}
                                         </h4>
                                     </div>
                                     <p class="mb-1">الطلبات في الشهر</p>
@@ -83,7 +83,7 @@
                                                 <i class="ti ti-basket-filled ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Order::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_orders'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">إجمالي الطلبات</p>
                                 </div>
@@ -97,11 +97,10 @@
                                     <div class="d-flex align-items-center mb-2 pb-1">
                                         <div class="avatar me-2">
                                             <span class="avatar-initial rounded bg-label-danger">
-                                                <i class="ti ti-basket-x ti-md"></i>
+                                                <i class="ti ti-x ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Order::where('status', 'cancelled')->count() }}
-                                        </h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['cancelled_orders'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">الطلبات الملغية</p>
                                 </div>
@@ -118,7 +117,7 @@
                                                 <i class="ti ti-users ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\User::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_users'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">عدد العملاء</p>
                                 </div>
@@ -136,7 +135,7 @@
                                             </span>
                                         </div>
                                         <h4 class="ms-1 mb-0">
-                                            {{ \App\Models\User::whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])->count() }}
+                                            {{ $stats['monthly_users'] ?? 0 }}
                                         </h4>
                                     </div>
                                     <p class="mb-1">العملاء في الشهر</p>
@@ -154,7 +153,7 @@
                                                 <i class="ti ti-user-cog ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Admin::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_admins'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">عدد الموظفين</p>
                                 </div>
@@ -171,7 +170,7 @@
                                                 <i class="ti ti-eye ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Visitor::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_visitors'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">عدد الزيارات</p>
                                 </div>
@@ -189,7 +188,7 @@
                                             </span>
                                         </div>
                                         <h4 class="ms-1 mb-0">
-                                            {{ \App\Models\Visitor::whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])->count() }}
+                                            {{ $stats['monthly_visitors'] ?? 0 }}
                                         </h4>
                                     </div>
                                     <p class="mb-1">الزيارات في الشهر</p>
@@ -207,7 +206,7 @@
                                                 <i class="ti ti-package ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Product::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_products'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">عدد المنتجات</p>
                                 </div>
@@ -225,7 +224,7 @@
                                             </span>
                                         </div>
                                         <h4 class="ms-1 mb-0">
-                                            {{ \App\Models\Product::whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])->count() }}
+                                            {{ $stats['monthly_products'] ?? 0 }}
                                         </h4>
                                     </div>
                                     <p class="mb-1">المنتجات المضافة هذا الشهر</p>
@@ -243,7 +242,7 @@
                                                 <i class="ti ti-category ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">{{ \App\Models\Category::count() }}</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['total_categories'] ?? 0 }}</h4>
                                     </div>
                                     <p class="mb-1">عدد الأقسام</p>
                                 </div>
@@ -260,14 +259,14 @@
                                                 <i class="ti ti-currency-pound ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">EGP 6034.71</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['base_currency'] ?? 'EGP' }} {{ number_format($stats['total_revenue'] ?? 0, 2) }}</h4>
                                     </div>
                                     <p class="mb-1">إجمالي الإيرادات</p>
                                 </div>
                             </div>
                         </div>
 
-                        {{-- الأرباح --}}
+                        {{-- صافي الإيرادات --}}
                         <div class="col-sm-6 col-lg-4 mb-4">
                             <div class="card card-border-shadow-warning">
                                 <div class="card-body">
@@ -277,9 +276,9 @@
                                                 <i class="ti ti-chart-donut ti-md"></i>
                                             </span>
                                         </div>
-                                        <h4 class="ms-1 mb-0">EGP 1206.95</h4>
+                                        <h4 class="ms-1 mb-0">{{ $stats['base_currency'] ?? 'EGP' }} {{ number_format($stats['net_revenue'] ?? 0, 2) }}</h4>
                                     </div>
-                                    <p class="mb-1">أرباح المنصة</p>
+                                    <p class="mb-1">صافي الإيرادات</p>
                                 </div>
                             </div>
                         </div>
@@ -290,14 +289,16 @@
                 <div class="col-xxl-4 mb-4 order-5 order-xxl-0">
                     <div class="card mb-4">
                         <div class="card-header pb-0">
-                            <h5 class="card-title mb-0">EGP 0</h5>
-                            <small class="text-muted">ارباح المنصة اخر شهر</small>
+                            <h5 class="card-title mb-0">{{ $stats['base_currency'] ?? 'EGP' }} {{ number_format($stats['this_month_revenue'] ?? 0, 2) }}</h5>
+                            <small class="text-muted">إيرادات المنصة هذا الشهر</small>
                         </div>
                         <div class="card-body">
                             <div id="expensesChart"></div>
                             <div class="mt-md-2 text-center mt-lg-3 mt-3">
-                                <small class="text-muted mt-3">زيادة ارباح المنصة ب 0 عن الشهر
-                                    الماضي</small>
+                                @php $diff = $stats['revenue_diff'] ?? 0; @endphp
+                                <small class="text-muted mt-3">
+                                    {{ $diff >= 0 ? 'زيادة' : 'انخفاض' }} إيرادات المنصة بـ {{ number_format(abs($diff), 2) }} {{ $stats['base_currency'] ?? 'EGP' }} عن الشهر الماضي
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -309,83 +310,45 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="d-none d-lg-flex vehicles-progress-labels mb-4">
-                                <div class="vehicles-progress-label on-the-way-text" style="width: 27.27%">المحفظة</div>
-                                <div class="vehicles-progress-label unloading-text" style="width: 63.64%">
-                                    كاش</div>
-                                <div class="vehicles-progress-label loading-text" style="width: 9.09%">
-                                    بطاقة بنكية</div>
-
-                            </div>
-                            <div class="vehicles-overview-progress progress rounded-2 my-4" style="height: 46px">
-                                <div class="progress-bar fw-medium text-start bg-body text-dark px-3 rounded-0"
-                                    role="progressbar" style="width:  27.27%" aria-valuenow=" 27.27" aria-valuemin="0"
-                                    aria-valuemax="100">
-                                    27.27%
+                            @if (!empty($paymentMethodsBreakdown))
+                                <div class="vehicles-overview-progress progress rounded-2 my-4" style="height: 46px">
+                                    @foreach ($paymentMethodsBreakdown as $method)
+                                        @if ($method['percent'] > 0)
+                                            <div class="progress-bar fw-medium text-start {{ $method['color'] }} px-2"
+                                                role="progressbar" style="width: {{ $method['percent'] }}%"
+                                                aria-valuenow="{{ $method['percent'] }}" aria-valuemin="0" aria-valuemax="100"
+                                                title="{{ $method['label'] }} ({{ $method['percent'] }}%)">
+                                                @if ($method['percent'] >= 10)
+                                                    {{ $method['percent'] }}%
+                                                @endif
+                                            </div>
+                                        @endif
+                                    @endforeach
                                 </div>
-                                <div class="progress-bar fw-medium text-start bg-primary px-3" role="progressbar"
-                                    style="width: 63.64%" aria-valuenow="63.64" aria-valuemin="0" aria-valuemax="100">
-                                    63.64%
+                                <div class="table-responsive">
+                                    <table class="table card-table">
+                                        <tbody class="table-border-bottom-0">
+                                            @foreach ($paymentMethodsBreakdown as $method)
+                                                <tr>
+                                                    <td class="w-50 ps-0">
+                                                        <div class="d-flex justify-content-start align-items-center">
+                                                            <div class="me-2">
+                                                                <i class="ti ti-credit-card mt-n1"></i>
+                                                            </div>
+                                                            <h6 class="mb-0 fw-normal">{{ $method['label'] }}</h6>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end pe-0">
+                                                        <span class="fw-medium">{{ $method['percent'] }}% ({{ $method['count'] }})</span>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div class="
-                                    progress-bar fw-medium text-start text-bg-info px-2 rounded-0 px-lg-2 px-xxl-3
-
-                                    "
-                                    role="progressbar" style="width:  9.09%" aria-valuenow=" 9.09" aria-valuemin="0"
-                                    aria-valuemax="100">
-                                    9.09%
-                                </div>
-
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table card-table">
-                                    <tbody class="table-border-bottom-0">
-                                        <tr>
-                                            <td class="w-50 ps-0">
-                                                <div class="d-flex justify-content-start align-items-center">
-                                                    <div class="me-2">
-                                                        <i class="ti ti-wallet mt-n1"></i>
-                                                    </div>
-                                                    <h6 class="mb-0 fw-normal">المحفظة</h6>
-                                                </div>
-                                            </td>
-
-                                            <td class="text-end pe-0">
-                                                <span class="fw-medium"> 27.27%</span>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td class="w-50 ps-0">
-                                                <div class="d-flex justify-content-start align-items-center">
-                                                    <div class="me-2">
-                                                        <i class="ti ti-cash mt-n1"></i>
-                                                    </div>
-                                                    <h6 class="mb-0 fw-normal">كاش</h6>
-                                                </div>
-                                            </td>
-
-                                            <td class="text-end pe-0">
-                                                <span class="fw-medium">63.64%</span>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td class="w-50 ps-0">
-                                                <div class="d-flex justify-content-start align-items-center">
-                                                    <div class="me-2">
-                                                        <i class="ti ti-credit-card mt-n1"></i>
-                                                    </div>
-                                                    <h6 class="mb-0 fw-normal">بطاقة بنكية</h6>
-                                                </div>
-                                            </td>
-
-                                            <td class="text-end pe-0">
-                                                <span class="fw-medium">9.09%</span>
-                                            </td>
-                                        </tr>
-
-                                    </tbody>
-                                </table>
-                            </div>
+                            @else
+                                <p class="text-muted text-center mb-0">لا توجد بيانات لطلبات مدفوعة بعد</p>
+                            @endif
                         </div>
                     </div>
 
@@ -406,11 +369,9 @@
                             <div class="col-md-4 mb-4">
                                 <select name="visitors_year" id="visitors_year" class="form-control select2">
                                     <option value="">اختر السنة</option>
-                                    <option value="2025">2025</option>
-                                    <option value="2024">2024</option>
-                                    <option value="2023">2023</option>
-                                    <option value="2022">2022</option>
-                                    <option value="2021">2021</option>
+                                    @foreach ($chartYears ?? range(now()->year, now()->year - 4) as $yr)
+                                        <option value="{{ $yr }}" {{ $yr == now()->year ? 'selected' : '' }}>{{ $yr }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
@@ -440,28 +401,31 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {{-- @foreach ($topCustomers as $row)
+                                    @forelse ($topCustomers ?? [] as $row)
                                         <tr>
                                             <td class="pt-2">
-                                                <div class="d-flex justify-content-start align-items-center mt-lg-4">
+                                                <div class="d-flex justify-content-start align-items-center">
                                                     <div class="avatar me-3 avatar-sm">
-                                                        <img src="{{ get_user_image($row->user?->image) }}"
-                                                            alt="" class="rounded-circle" />
+                                                        <span class="avatar-initial rounded-circle bg-label-primary">
+                                                            {{ mb_substr($row->user?->name ?? 'ع', 0, 1) }}
+                                                        </span>
                                                     </div>
-
                                                     <span class="mb-0">
-                                                        {{ $row->user?->name ?? 'بدون اسم' }}
+                                                        {{ $row->user?->name ?? 'عميل #' . $row->user_id }}
                                                     </span>
                                                 </div>
                                             </td>
-
                                             <td class="text-end pt-2">
-                                                <div class="user-progress mt-lg-4">
+                                                <div class="user-progress">
                                                     <p class="mb-0 fw-medium">{{ $row->orders_count }}</p>
                                                 </div>
                                             </td>
                                         </tr>
-                                    @endforeach --}}
+                                    @empty
+                                        <tr>
+                                            <td colspan="2" class="text-center text-muted py-3">لا توجد طلبات مسجلة بعد</td>
+                                        </tr>
+                                    @endforelse
                                 </tbody>
 
                             </table>
@@ -478,21 +442,14 @@
                 <div class="col-6 col-md-6 mb-4">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between">
-                            <h4 id="sales_data">احصائات الطلبات 2025</h4>
+                            <h4 id="sales_data">احصائيات الطلبات {{ now()->year }}</h4>
 
                             <div class="col-md-4 mb-4">
                                 <select name="sales_year" id="year" class="form-control select2 year">
                                     <option value="">اختر السنة</option>
-                                    <option value="2025">
-                                        2025</option>
-                                    <option value="2024">
-                                        2024</option>
-                                    <option value="2023">
-                                        2023</option>
-                                    <option value="2022">
-                                        2022</option>
-                                    <option value="2021">
-                                        2021</option>
+                                    @foreach ($chartYears ?? range(now()->year, now()->year - 4) as $yr)
+                                        <option value="{{ $yr }}" {{ $yr == now()->year ? 'selected' : '' }}>{{ $yr }}</option>
+                                    @endforeach
                                 </select>
 
                             </div>
@@ -506,21 +463,14 @@
                 <div class="col-6 col-md-6 mb-4">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between">
-                            <h4 id="all_data">الاحصائيات لسنة 2025</h4>
+                            <h4 id="all_data">الاحصائيات لسنة {{ now()->year }}</h4>
 
                             <div class="col-md-4 mb-4">
                                 <select name="data_year" id="data_year" class="form-control select2 year">
                                     <option value="">اختر السنة</option>
-                                    <option value="2025">
-                                        2025</option>
-                                    <option value="2024">
-                                        2024</option>
-                                    <option value="2023">
-                                        2023</option>
-                                    <option value="2022">
-                                        2022</option>
-                                    <option value="2021">
-                                        2021</option>
+                                    @foreach ($chartYears ?? range(now()->year, now()->year - 4) as $yr)
+                                        <option value="{{ $yr }}" {{ $yr == now()->year ? 'selected' : '' }}>{{ $yr }}</option>
+                                    @endforeach
                                 </select>
 
                             </div>
@@ -638,8 +588,8 @@
                 loadChart(this.value);
             });
 
-            // تحميل أول سنة تلقائياً
-            loadChart(2025);
+            // تحميل السنة الحالية تلقائياً
+            loadChart({{ now()->year }});
         });
     </script>
 

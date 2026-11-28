@@ -112,6 +112,6 @@ class AdminAuthController extends Controller
 
     public function home()
     {
-        return view('Admin.index');
+        return view('Admin.index', DashboardController::getDashboardData());
     }
 }
